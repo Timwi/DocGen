@@ -2,15 +2,15 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using RT.DocGen;
+using RT.PropellerApi;
 using RT.Servers;
 using RT.Util;
 using RT.Util.ExtensionMethods;
 using RT.Util.Xml;
 
-namespace RT.Propeller.Modules
+namespace RT.DocGen
 {
-    public class DocGen : MarshalByRefObject, IPropellerModule
+    public class DocGenPropellerModule : MarshalByRefObject, IPropellerModule
     {
         public class Settings
         {
