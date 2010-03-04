@@ -2,12 +2,13 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using RT.DocGen;
 using RT.Servers;
 using RT.Util;
 using RT.Util.ExtensionMethods;
 using RT.Util.Xml;
 
-namespace Propeller.Modules
+namespace RT.Propeller.Modules
 {
     public class DocGen : MarshalByRefObject, IPropellerModule
     {

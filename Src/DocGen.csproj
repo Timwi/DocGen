@@ -8,7 +8,7 @@
     <ProjectGuid>{0D929F3C-D064-4266-8F35-907FA7650D2D}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>DocGen</RootNamespace>
+    <RootNamespace>RT.DocGen</RootNamespace>
     <AssemblyName>DocGen</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -46,7 +46,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DocumentationGenerator.cs" />
+    <Compile Include="DocumentationGenerator.cs">
+    </Compile>
     <Compile Include="PropellerModule.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

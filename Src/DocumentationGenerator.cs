@@ -6,11 +6,12 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using RT.Servers;
 using RT.TagSoup.HtmlTags;
 using RT.Util.ExtensionMethods;
 using RT.Util.Streams;
 
-namespace RT.Servers
+namespace RT.DocGen
 {
     /// <summary>
     /// Provides an <see cref="HttpRequestHandler"/> that generates web pages from C# XML documentation.
@@ -143,10 +144,7 @@ namespace RT.Servers
                             var dcmn = documentationCompatibleMemberName(mem);
                             XElement mdoc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == dcmn);
 
-                            // Special case: cast operators are allowed to have the same name (op_Implicit/op_Explicit) and the same parameter names, so need to disambiguate them.
-                            while (_members.ContainsKey(dcmn)) dcmn += "|";
-
-                            // Special case: auto-generate documentation for an automatically-generated public default constructor without documentation
+                            // Special case: if it's an automatically-generated public default constructor without documentation, auto-generate documentation for it
                             if (mem is ConstructorInfo && mdoc == null)
                             {
                                 var c = (ConstructorInfo) mem;
@@ -261,7 +259,7 @@ namespace RT.Servers
                                             (object) generateNamespaceDocumentation(ns, req) :
                                         req.RestUrl == "/"
                                             ? new DIV("Select an item from the list on the left.") { class_ = "warning" }
-                                            : new DIV("No documentation available for this item.") { class_ = "warning" }
+                                            : new DIV("This item is not documented.") { class_ = "warning" }
                                     )
                                 )
                             )
@@ -402,8 +400,13 @@ namespace RT.Servers
                 yield return "delegate ";
             if (returnType && m.MemberType != MemberTypes.Constructor)
             {
-                yield return friendlyTypeName(((MethodInfo) m).ReturnType, namespaces, baseUrl, false);
-                yield return " ";
+                var meth = (MethodInfo) m;
+                // For the cast operators, omit the return type because they later become part of the operator name
+                if (meth.Name != "op_Implicit" && meth.Name != "op_Explicit")
+                {
+                    yield return friendlyTypeName(meth.ReturnType, namespaces, baseUrl, false);
+                    yield return " ";
+                }
             }
             if ((m.MemberType == MemberTypes.Constructor || isDelegate) && url != null)
                 yield return new STRONG(new A(friendlyTypeName(mi.DeclaringType, namespaces)) { href = url });
@@ -570,6 +573,13 @@ namespace RT.Servers
                 sb.Append(m.ToString());
                 sb.Append(" (Unknown member type: " + m.MemberType + ")");
             }
+
+            // Special case: cast operators have their return type tacked onto the end because otherwise the signature wouldn't be unique
+            if (m is MethodInfo && (m.Name == "op_Implicit" || m.Name == "op_Explicit"))
+            {
+                var b = (MethodInfo) m;
+                sb.Append("~" + stringifyParameterType(b.ReturnType, b, b.ReflectedType));
+            }
             return sb.ToString();
         }
 
@@ -727,14 +737,14 @@ namespace RT.Servers
         {
             yield return new H1("Namespace: ", namespaceName);
 
-            foreach (var gr in _namespaces[namespaceName].Types.GroupBy(kvp => kvp.Value.Type.IsEnum).OrderBy(gr => gr.Key))
+            foreach (var gr in _namespaces[namespaceName].Types.Where(t => !t.Value.Type.IsNested).GroupBy(kvp => kvp.Value.Type.IsEnum).OrderBy(gr => gr.Key))
             {
                 yield return new H2(gr.Key ? "Enums in this namespace" : "Classes and structs in this namespace");
                 yield return new TABLE { class_ = "doclist" }._(
                     gr.Select(kvp => new TR(
                         new TD(new A(friendlyTypeName(kvp.Value.Type, false)) { href = req.BaseUrl + "/" + GetTypeFullName(kvp.Value.Type).UrlEscape() }),
                         new TD(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
-                            ? (object) new EM("No documentation available.")
+                            ? (object) new EM("This type is not documented.")
                             : interpretBlock(kvp.Value.Documentation.Element("summary").Nodes(), req))
                     ))
                 );
@@ -796,7 +806,7 @@ namespace RT.Servers
                                 new STRONG(pi.Name)
                             ),
                             new TD(docElem == null
-                                ? (object) new EM("No documentation available.")
+                                ? (object) new EM("This parameter is not documented.")
                                 : interpretBlock(docElem.Nodes(), req))
                         );
                     })
@@ -825,7 +835,7 @@ namespace RT.Servers
             }
 
             if (document == null)
-                yield return new DIV("No documentation available for this type.") { class_ = "warning" };
+                yield return new DIV(new EM("This type is not documented.")) { class_ = "warning" };
             else
             {
                 var summary = document.Element("summary");
@@ -851,7 +861,7 @@ namespace RT.Servers
                                     new STRONG(pi.Name)
                                 ),
                                 new TD(docElem == null
-                                    ? (object) new EM("No documentation available.")
+                                    ? (object) new EM("This parameter is not documented.")
                                     : interpretBlock(docElem.Nodes(), req))
                             );
                         })
@@ -901,7 +911,7 @@ namespace RT.Servers
                         gr.Select(kvp => new TR(
                             new TD { class_ = "item" }._(friendlyMemberName(kvp.Value.Member, true, false, true, true, false, false, req.BaseUrl + "/" + kvp.Key.UrlEscape(), req.BaseUrl)),
                             new TD(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
-                                ? (object) new EM("No documentation available.")
+                                ? (object) new EM("This member is not documented.")
                                 : interpretBlock(kvp.Value.Documentation.Element("summary").Nodes(), req))
                         ))
                     );
@@ -923,7 +933,7 @@ namespace RT.Servers
                     return new TR(
                         new TD { class_ = "item" }._(new STRONG(gta.Name)),
                         new TD(
-                            docElem == null ? (object) new EM("No documentation available.") : interpretBlock(docElem.Nodes(), req),
+                            docElem == null ? (object) new EM("This type parameter is not documented.") : interpretBlock(docElem.Nodes(), req),
                             constraints == null || constraints.Length == 0 ? null :
                             constraints.Length > 0 ? new object[] { new BR(), new EM("Must be derived from:"), ' ', friendlyTypeName(constraints[0], true, req.BaseUrl, false), 
                                 constraints.Skip(1).Select(c => new object[] { ", ", friendlyTypeName(constraints[0], true, req.BaseUrl, false) }) } : null
