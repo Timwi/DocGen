@@ -18,31 +18,12 @@ namespace RT.DocGen
             public string[] Paths = new string[] { };
         }
 
-        private class documentable
-        {
-            public string DllPath;
-            public string XmlPath;
-            public DateTime DllLastChange;
-            public DateTime XmlLastChange;
-            public override bool Equals(object obj)
-            {
-                if (!(obj is documentable))
-                    return false;
-                var d = (documentable) obj;
-                return DllPath == d.DllPath && XmlPath == d.XmlPath && DllLastChange == d.DllLastChange && XmlLastChange == d.XmlLastChange;
-            }
-            public override int GetHashCode()
-            {
-                return DllPath.GetHashCode() + XmlPath.GetHashCode() + DllLastChange.GetHashCode() + XmlLastChange.GetHashCode();
-            }
-        }
-
         private Settings _settings;
         private DocumentationGenerator _docGen;
-        private List<documentable> _docs;
-        private string[] _paths;
         private string _configFilePath;
         private LoggerBase _log;
+
+        public string GetName() { return "DocGen"; }
 
         public PropellerModuleInitResult Init(string origDllPath, string tempDllPath, LoggerBase log)
         {
@@ -75,16 +56,14 @@ namespace RT.DocGen
             }
             Directory.CreateDirectory(copyToPath);
 
-            _paths = _settings.Paths.Where(d => Directory.Exists(d)).ToArray();
-            _docs = getDocList();
-
-            _docGen = new DocumentationGenerator(_paths, copyToPath);
+            var paths = _settings.Paths.Where(d => Directory.Exists(d)).ToArray();
+            _docGen = new DocumentationGenerator(paths, copyToPath);
             lock (_log)
                 _log.Info("DocGen: Initialised successfully.");
             return new PropellerModuleInitResult
             {
                 HandlerHooks = new HttpRequestHandlerHook[] { new HttpRequestHandlerHook(_settings.Url, _docGen.GetRequestHandler()) },
-                FileFiltersToBeMonitoredForChanges = _paths.Select(p => Path.Combine(p, "*.dll")).Concat(_paths.Select(p => Path.Combine(p, "*.xml"))).Concat(_configFilePath)
+                FileFiltersToBeMonitoredForChanges = paths.Select(p => Path.Combine(p, "*.dll")).Concat(paths.Select(p => Path.Combine(p, "*.xml"))).Concat(_configFilePath)
             };
         }
 
@@ -128,32 +107,35 @@ namespace RT.DocGen
                         _log.Warn(@"DocGen: Configuration file renamed to ""{0}"".".Fmt(renameTo));
                 }
                 lock (_log)
-                    _log.Warn("DocGen: Creating new configuration file with default values.");
-                var newPath = Path.Combine(Path.GetDirectoryName(_configFilePath), "DocGen");
-                Directory.CreateDirectory(newPath);
-                _settings = new Settings { Paths = new string[] { newPath } };
-                XmlClassify.SaveObjectToXmlFile(_settings, _configFilePath);
-            }
-        }
+                    _log.Info("DocGen: Creating new configuration file with default values...");
 
-        private List<documentable> getDocList()
-        {
-            var list = new List<documentable>();
-            foreach (var path in _paths)
-            {
-                foreach (var file in new DirectoryInfo(path).GetFiles("*.dll"))
+                var newPath = Path.Combine(Path.GetDirectoryName(_configFilePath), "DocGen");
+                try
                 {
-                    // .GetFiles("*.dll") finds all files whose extension begins with .dll, i.e. it includes files like *.dll2. This is for backward-compatibility with 8.3 filenames. Filter these out.
-                    if (!file.Name.EndsWith(".dll"))
-                        continue;
-                    var xmlFile = Path.Combine(file.DirectoryName, Path.GetFileNameWithoutExtension(file.Name) + ".docs.xml");
-                    if (!File.Exists(xmlFile))
-                        continue;
-                    FileInfo xmlFileInfo = new FileInfo(xmlFile);
-                    list.Add(new documentable { DllPath = file.FullName, DllLastChange = file.LastWriteTimeUtc, XmlPath = xmlFileInfo.FullName, XmlLastChange = xmlFileInfo.LastWriteTimeUtc });
+                    Directory.CreateDirectory(newPath);
+                }
+                catch (Exception e3)
+                {
+                    lock (_log)
+                    {
+                        _log.Error("DocGen: Error creating directory: {0}".Fmt(newPath));
+                        _log.Error(e3.Message);
+                    }
+                }
+                _settings = new Settings { Paths = new string[] { newPath } };
+                try
+                {
+                    XmlClassify.SaveObjectToXmlFile(_settings, _configFilePath);
+                }
+                catch (Exception e3)
+                {
+                    lock (_log)
+                    {
+                        _log.Error("DocGen: Error saving configuration file: {0}".Fmt(_configFilePath));
+                        _log.Error(e3.Message);
+                    }
                 }
             }
-            return list;
         }
 
         public bool MustReinitServer()
