@@ -84,7 +84,7 @@ namespace RT.DocGen
             return new PropellerModuleInitResult
             {
                 HandlerHooks = new HttpRequestHandlerHook[] { new HttpRequestHandlerHook(_settings.Url, _docGen.GetRequestHandler()) },
-                FileFiltersToBeMonitoredForChanges = _settings.Paths.Select(p => Path.Combine(p, "*.dll")).Concat(_settings.Paths.Select(p => Path.Combine(p, "*.xml"))).Concat(_configFilePath)
+                FileFiltersToBeMonitoredForChanges = _paths.Select(p => Path.Combine(p, "*.dll")).Concat(_paths.Select(p => Path.Combine(p, "*.xml"))).Concat(_configFilePath)
             };
         }
 
