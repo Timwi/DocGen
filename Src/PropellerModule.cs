@@ -41,51 +41,18 @@ namespace RT.DocGen
         private DocumentationGenerator _docGen;
         private List<documentable> _docs;
         private string[] _paths;
+        private string _configFilePath;
+        private LoggerBase _log;
 
         public PropellerModuleInitResult Init(string origDllPath, string tempDllPath, LoggerBase log)
         {
-            string configFilePath = Path.Combine(Path.GetDirectoryName(origDllPath), Path.GetFileNameWithoutExtension(origDllPath) + ".config.xml");
-
-            try
-            {
-                _settings = XmlClassify.LoadObjectFromXmlFile<Settings>(configFilePath);
-            }
-            catch (Exception e)
-            {
-                if (File.Exists(configFilePath))
-                {
-                    log.Warn("DocGen: Error reading configuration file: {0}".Fmt(configFilePath));
-                    log.Warn(e.Message);
-
-                    string renameTo = configFilePath;
-                    int i = 1;
-                    while (File.Exists(renameTo))
-                    {
-                        i++;
-                        renameTo = Path.Combine(Path.GetDirectoryName(configFilePath), Path.GetFileNameWithoutExtension(configFilePath) + " (" + i + ")" + Path.GetExtension(configFilePath));
-                    }
-                    try
-                    {
-                        File.Move(configFilePath, renameTo);
-                    }
-                    catch (Exception e2)
-                    {
-                        log.Warn("DocGen: Error renaming configuration file to: {0}".Fmt(renameTo));
-                        log.Warn(e2.Message);
-                        return null;
-                    }
-                    log.Warn(@"DocGen: Configuration file renamed to ""{0}"".".Fmt(renameTo));
-                }
-                log.Warn("DocGen: Creating new configuration file with default values.");
-                var newPath = Path.Combine(Path.GetDirectoryName(configFilePath), "DocGen");
-                Directory.CreateDirectory(newPath);
-                _settings = new Settings { Paths = new string[] { newPath } };
-                XmlClassify.SaveObjectToXmlFile(_settings, configFilePath);
-            }
+            _log = log;
+            _configFilePath = Path.Combine(Path.GetDirectoryName(origDllPath), Path.GetFileNameWithoutExtension(origDllPath) + ".config.xml");
+            loadSettings();
 
             foreach (var invalid in _settings.Paths.Where(d => !Directory.Exists(d)))
-                lock (log)
-                    log.Warn(@"DocGen: Warning: The folder ""{0}"" specified in the configuration file ""{1}"" does not exist. Ignoring path.".Fmt(invalid, configFilePath));
+                lock (_log)
+                    _log.Warn(@"DocGen: Warning: The folder ""{0}"" specified in the configuration file ""{1}"" does not exist. Ignoring path.".Fmt(invalid, _configFilePath));
 
             // Try to clean up old folders we've created before
             var tempPath = Path.GetTempPath();
@@ -112,11 +79,61 @@ namespace RT.DocGen
             _docs = getDocList();
 
             _docGen = new DocumentationGenerator(_paths, copyToPath);
-            log.Info("DocGen: Initialised successfully.");
+            lock (_log)
+                _log.Info("DocGen: Initialised successfully.");
             return new PropellerModuleInitResult
             {
-                HandlerHooks = new HttpRequestHandlerHook[] { new HttpRequestHandlerHook(_settings.Url, _docGen.GetRequestHandler()) }
+                HandlerHooks = new HttpRequestHandlerHook[] { new HttpRequestHandlerHook(_settings.Url, _docGen.GetRequestHandler()) },
+                FileFiltersToBeMonitoredForChanges = _settings.Paths.Select(p => Path.Combine(p, "*.dll")).Concat(_settings.Paths.Select(p => Path.Combine(p, "*.xml"))).Concat(_configFilePath)
             };
+        }
+
+        private void loadSettings()
+        {
+            try
+            {
+                _settings = XmlClassify.LoadObjectFromXmlFile<Settings>(_configFilePath);
+            }
+            catch (Exception e)
+            {
+                if (File.Exists(_configFilePath))
+                {
+                    lock (_log)
+                    {
+                        _log.Warn("DocGen: Error reading configuration file: {0}".Fmt(_configFilePath));
+                        _log.Warn(e.Message);
+                    }
+
+                    string renameTo = _configFilePath;
+                    int i = 1;
+                    while (File.Exists(renameTo))
+                    {
+                        i++;
+                        renameTo = Path.Combine(Path.GetDirectoryName(_configFilePath), Path.GetFileNameWithoutExtension(_configFilePath) + " (" + i + ")" + Path.GetExtension(_configFilePath));
+                    }
+                    try
+                    {
+                        File.Move(_configFilePath, renameTo);
+                    }
+                    catch (Exception e2)
+                    {
+                        lock (_log)
+                        {
+                            _log.Warn("DocGen: Error renaming configuration file to: {0}".Fmt(renameTo));
+                            _log.Warn(e2.Message);
+                        }
+                        return;
+                    }
+                    lock (_log)
+                        _log.Warn(@"DocGen: Configuration file renamed to ""{0}"".".Fmt(renameTo));
+                }
+                lock (_log)
+                    _log.Warn("DocGen: Creating new configuration file with default values.");
+                var newPath = Path.Combine(Path.GetDirectoryName(_configFilePath), "DocGen");
+                Directory.CreateDirectory(newPath);
+                _settings = new Settings { Paths = new string[] { newPath } };
+                XmlClassify.SaveObjectToXmlFile(_settings, _configFilePath);
+            }
         }
 
         private List<documentable> getDocList()
@@ -141,7 +158,7 @@ namespace RT.DocGen
 
         public bool MustReinitServer()
         {
-            return !getDocList().SequenceEqual(_docs);
+            return false;
         }
 
         public void Shutdown()
