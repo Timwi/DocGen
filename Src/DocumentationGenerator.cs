@@ -28,6 +28,32 @@ namespace RT.DocGen
             public Type Type;
             public XElement Documentation;
             public SortedDictionary<string, memberInfo> Members;
+
+            internal string GetTypeLetters()
+            {
+                if (Type.IsInterface)
+                    return "In";
+                if (Type.IsEnum)
+                    return "En";
+                if (typeof(Delegate).IsAssignableFrom(Type))
+                    return "De";
+                if (Type.IsValueType)
+                    return "St";
+                return "Cl";
+            }
+
+            internal string GetTypeCssClass()
+            {
+                if (Type.IsInterface)
+                    return "Interface";
+                if (Type.IsEnum)
+                    return "Enum";
+                if (typeof(Delegate).IsAssignableFrom(Type))
+                    return "Delegate";
+                if (Type.IsValueType)
+                    return "Struct";
+                return "Class";
+            }
         }
 
         private class memberInfo
@@ -41,25 +67,42 @@ namespace RT.DocGen
         private SortedDictionary<string, memberInfo> _members;
 
         private static string _css = @"
-            body { font-family: ""Calibri"", ""Verdana"", sans-serif; font-size: 11pt; margin: .5em; }
-            .namespace a { font-weight: bold; }
-            .sidebar li.type { font-weight: bold; }
-            .sidebar li.type > ul { font-weight: normal; }
-            .sidebar li { padding-left: 1em; text-indent: -1em; margin: 0; }
-            .sidebar li.Constructor, .sidebar ul.legend span.Constructor { background: #bfb; }
-            .sidebar li.Method, .sidebar ul.legend span.Method { background: #cdf; }
-            .sidebar li.Property, .sidebar ul.legend span.Property { background: #fcf; }
-            .sidebar li.Event, .sidebar ul.legend span.Event { background: #faa; }
-            .sidebar li.Field, .sidebar ul.legend span.Field { background: #ee8; }
+            body { font-family: ""Segoe UI"", ""Verdana"", sans-serif; font-size: 11pt; margin: .5em; }
+            .namespace { font-weight: normal; color: #888; }
+            a.namespace { color: #00e; }
+            a.namespace:visited { color: #551a8b; }
+            .Method { font-weight: normal; }
+            .sidebar { font-size: small; }
+            .sidebar li { margin: 0; }
+            .sidebar div.type { padding-left: 2em; }
+            .sidebar div.member { padding-left: 2.5em; text-indent: -2.5em; }
+            .sidebar div.type > div { font-weight: normal; }
+            .sidebar div.type > div.line { font-weight: bold; padding-left: 0.5em; text-indent: -2.5em; }
+            .sidebar div.type span.typeicon, .sidebar div.member span.icon { display: inline-block; width: 1.5em; margin-right: 0.5em; text-indent: 0; text-align: center; color: #000; -moz-border-radius: 0.7em 0.7em 0.7em 0.7em; }
+            .sidebar div.legend div.type, .sidebar div.legend div.member { padding-left: 0; }
+
+            span.icon, span.typeicon { font-size: smaller; }
+
+            .sidebar div.Constructor.member span.icon { background-color: #bfb; border: 2px solid #bfb; }
+            .sidebar div.Method.member span.icon { background-color: #cdf; border: 2px solid #cdf; }
+            .sidebar div.Property.member span.icon { background-color: #fcf; border: 2px solid #fcf; }
+            .sidebar div.Event.member span.icon { background-color: #faa; border: 2px solid #faa; }
+            .sidebar div.Field.member span.icon { background-color: #ee8; border: 2px solid #ee8; }
+            .sidebar div.member.missing span.icon { border-color: red; }
+
+            .sidebar div.Class.type span.typeicon { background-color: #4df; border: 2px solid #4df; }
+            .sidebar div.Struct.type span.typeicon { background-color: #f9f; border: 2px solid #f9f; }
+            .sidebar div.Enum.type span.typeicon { background-color: #4f8; border: 2px solid #4f8; }
+            .sidebar div.Interface.type span.typeicon { background-color: #f44; border: 2px solid #f44; }
+            .sidebar div.Delegate.type span.typeicon { background-color: #ff4; border: 2px solid #ff4; }
+            .sidebar div.type.missing span.typeicon { border-color: red; }
+
             .sidebar div.legend, .sidebar div.tree { background: #f8f8f8; border: 1px solid black; -moz-border-radius: 5px; padding: .5em; margin-bottom: .7em; }
-            .sidebar div.legend p { text-align: center; font-weight: bold; margin: .5em 0; }
-            .sidebar ul.legend, .sidebar ul.tree { margin: .5em 0; padding: 0 0 0 2em; }
-            .sidebar ul.legend li span { padding: 0 1.5em; margin-right: .5em; }
+            .sidebar div.legend p { text-align: center; font-weight: bold; margin: 0 0 0.4em 0; padding: 0.2em 0; background: #ddd; }
+            .sidebar ul.tree { margin: .5em 0; padding: 0 0 0 2em; }
             ul { padding-left: 1.5em; margin-bottom: 1em; }
             li { margin-top: 0.7em; margin-bottom: 0.7em; }
-            li.member { padding-right: 1em; }
-            li.member, li.type { list-style-image: url(data:image/png;base64,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); }
-            li.member.missing, li.type.missing { list-style-image: url(data:image/png;base64,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); }
+            li li { margin: 0; }
             table { border-collapse: collapse; }
             table.layout { border: hidden; width: 100%; margin: 0; }
             table.layout td { vertical-align: top; padding: 0; }
@@ -220,7 +263,7 @@ namespace RT.DocGen
                                     member.MemberType == MemberTypes.Property && isstatic ? "Static property: " :
                                     member.MemberType == MemberTypes.Property ? "Property: " : "Member: "
                                 ) : type != null ? (
-                                    type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : typeof(Delegate).IsAssignableFrom(type) ? "Delegate: " : "Class: "
+                                    type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : type.IsInterface ? "Interface: " : typeof(Delegate).IsAssignableFrom(type) ? "Delegate: " : "Class: "
                                 ) : ns != null ? "Namespace: " : null,
                                 member != null && member.MemberType == MemberTypes.Constructor ? (object) friendlyTypeName(type, false) :
                                     member != null ? member.Name : type != null ? (object) friendlyTypeName(type, false) : ns != null ? ns : null,
@@ -235,18 +278,29 @@ namespace RT.DocGen
                                     new TD { class_ = "sidebar" }._(
                                         new DIV { class_ = "tree" }._(
                                             new UL(_namespaces.Select(nkvp => new LI { class_ = "namespace" }._(new A(nkvp.Key) { href = req.BaseUrl + "/" + nkvp.Key.UrlEscape() },
-                                                ns == null || ns != nkvp.Key ? (object) "" :
-                                                new UL(nkvp.Value.Types.Where(tkvp => !tkvp.Value.Type.IsNested).Select(tkvp => generateTypeBullet(tkvp.Key, type, req)))
+                                                ns == null || ns != nkvp.Key ? null :
+                                                nkvp.Value.Types.Where(tkvp => !tkvp.Value.Type.IsNested).Select(tkvp => generateTypeBullet(tkvp.Key, type, req))
                                             )))
                                         ),
                                         new DIV { class_ = "legend" }._(
                                             new P("Legend"),
-                                            new UL { class_ = "legend" }._(
-                                                new LI(new SPAN { class_ = "Constructor" }, "Constructor"),
-                                                new LI(new SPAN { class_ = "Method" }, "Method"),
-                                                new LI(new SPAN { class_ = "Property" }, "Property"),
-                                                new LI(new SPAN { class_ = "Event" }, "Event"),
-                                                new LI(new SPAN { class_ = "Field" }, "Field")
+                                            new TABLE { width = "100%" }._(
+                                                new TR(
+                                                    new TD(
+                                                        new DIV(new SPAN("Cl") { class_ = "typeicon" }, "Class") { class_ = "Class type" },
+                                                        new DIV(new SPAN("St") { class_ = "typeicon" }, "Struct") { class_ = "Struct type" },
+                                                        new DIV(new SPAN("En") { class_ = "typeicon" }, "Enum") { class_ = "Enum type" },
+                                                        new DIV(new SPAN("In") { class_ = "typeicon" }, "Interface") { class_ = "Interface type" },
+                                                        new DIV(new SPAN("De") { class_ = "typeicon" }, "Delegate") { class_ = "Delegate type" }
+                                                    ),
+                                                    new TD(
+                                                        new DIV(new SPAN("C") { class_ = "icon" }, "Constructor") { class_ = "Constructor member" },
+                                                        new DIV(new SPAN("M") { class_ = "icon" }, "Method") { class_ = "Method member" },
+                                                        new DIV(new SPAN("P") { class_ = "icon" }, "Property") { class_ = "Property member" },
+                                                        new DIV(new SPAN("E") { class_ = "icon" }, "Event") { class_ = "Event member" },
+                                                        new DIV(new SPAN("F") { class_ = "icon" }, "Field") { class_ = "Field member" }
+                                                    )
+                                                )
                                             )
                                         )
                                     ),
@@ -324,7 +378,8 @@ namespace RT.DocGen
             {
                 if (includeNamespaces && !t.IsGenericParameter)
                 {
-                    yield return t.Namespace + ".";
+                    yield return new SPAN(t.Namespace) { class_ = "namespace" };
+                    yield return ".";
                     var outerTypes = new List<object>();
                     Type outT = t;
                     while (outT.IsNested)
@@ -412,8 +467,10 @@ namespace RT.DocGen
                 yield return new STRONG(new A(friendlyTypeName(mi.DeclaringType, namespaces)) { href = url });
             else if (isDelegate)
                 yield return new STRONG(friendlyTypeName(mi.DeclaringType, namespaces, baseUrl, false));
-            else if (containingType || m.MemberType == MemberTypes.Constructor)
+            else if (containingType)
                 yield return friendlyTypeName(mi.DeclaringType, namespaces, baseUrl, false);
+            else if (m.MemberType == MemberTypes.Constructor)
+                yield return new STRONG(friendlyTypeName(mi.DeclaringType, namespaces, baseUrl, false));
             if (!indent && (mi.IsGenericMethod || (parameterNames && mi.GetParameters().Any()))) yield return new WBR();
             if (m.MemberType != MemberTypes.Constructor && !isDelegate)
             {
@@ -711,18 +768,18 @@ namespace RT.DocGen
         private object generateTypeBullet(string typeFullName, Type selectedType, HttpRequest req)
         {
             var typeinfo = _types[typeFullName];
-            string cssClass = "type";
+            string cssClass = typeinfo.GetTypeCssClass()+" type";
             if (typeinfo.Documentation == null) cssClass += " missing";
-            return new LI { class_ = cssClass }._(new A(friendlyTypeName(typeinfo.Type, false)) { href = req.BaseUrl + "/" + typeFullName.UrlEscape() },
-                selectedType == null || !isNestedTypeOf(selectedType, typeinfo.Type) || typeof(Delegate).IsAssignableFrom(typeinfo.Type) ? (object) null :
-                new UL(typeinfo.Members.Where(mkvp => isPublic(mkvp.Value.Member)).Select(mkvp =>
+            return new DIV { class_ = cssClass }._(new DIV(new SPAN(typeinfo.GetTypeLetters()) { class_ = "typeicon" }, new A(friendlyTypeName(typeinfo.Type, false)) { href = req.BaseUrl + "/" + typeFullName.UrlEscape() }) { class_ = "line" },
+                selectedType == null || !isNestedTypeOf(selectedType, typeinfo.Type) || typeof(Delegate).IsAssignableFrom(typeinfo.Type) ? null :
+                typeinfo.Members.Where(mkvp => isPublic(mkvp.Value.Member)).Select(mkvp =>
                 {
                     string css = mkvp.Value.Member.MemberType.ToString() + " member";
                     if (mkvp.Value.Documentation == null) css += " missing";
                     return mkvp.Value.Member.MemberType != MemberTypes.NestedType
-                        ? new LI { class_ = css }._(new A(friendlyMemberName(mkvp.Value.Member, false, false, true, false, false)) { href = req.BaseUrl + "/" + mkvp.Key.UrlEscape() })
+                        ? new DIV { class_ = css }._(new SPAN(mkvp.Value.Member.MemberType.ToString()[0]) { class_ = "icon" }, new A(friendlyMemberName(mkvp.Value.Member, false, false, true, false, false)) { href = req.BaseUrl + "/" + mkvp.Key.UrlEscape() })
                         : generateTypeBullet(GetTypeFullName((Type) mkvp.Value.Member), selectedType, req);
-                }))
+                })
             );
         }
 
@@ -766,8 +823,9 @@ namespace RT.DocGen
                 member.MemberType == MemberTypes.Property ? (isStatic ? "Static property: " : "Property: ") : "Member: ",
                 friendlyMemberName(member, true, false, true, false, false)
             );
-            yield return new H2("Full definition");
-            yield return new PRE((isStatic ? "static " : null), friendlyMemberName(member, true, true, true, true, true, true, null, req.BaseUrl));
+            yield return new UL(new LI("Declared in: ", friendlyTypeName(member.DeclaringType, true, req.BaseUrl, false)));
+            yield return new H2("Declaration");
+            yield return new PRE((isStatic ? "static " : null), friendlyMemberName(member, true, false, true, true, false, true, null, req.BaseUrl));
 
             if (document != null)
             {
@@ -822,15 +880,44 @@ namespace RT.DocGen
             bool isDelegate = typeof(Delegate).IsAssignableFrom(type);
 
             yield return new H1(
-                isDelegate ? "Delegate: " : type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : "Class: ",
+                type.IsNested
+                    ? (isDelegate ? "Nested delegate: " : type.IsEnum ? "Nested enum: " : type.IsValueType ? "Nested struct: " : type.IsInterface ? "Nested interface: " : (type.IsAbstract && type.IsSealed) ? "Nested static class: " : type.IsAbstract ? "Nested abstract class: " : "Nested class: ")
+                    : (isDelegate ? "Delegate: " : type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : type.IsInterface ? "Interface: " : (type.IsAbstract && type.IsSealed) ? "Static class: " : type.IsAbstract ? "Abstract class: " : "Class: "),
                 friendlyTypeName(type, true)
+            );
+
+            LI typeTree = null;
+            if (!type.IsAbstract || !type.IsSealed || type.IsInterface)
+            {
+                var typeRecurse = type;
+                while (typeRecurse != null)
+                {
+                    var ftn = friendlyTypeName(typeRecurse, true, typeRecurse == type ? null : req.BaseUrl, false);
+                    typeTree = new LI(typeRecurse == typeof(object) ? "Inheritance:" : typeRecurse == type ? (object) new STRONG(ftn) : ftn, typeRecurse.IsSealed ? " (sealed)" : null, typeTree == null ? null : new UL(typeTree));
+                    typeRecurse = typeRecurse.BaseType;
+                }
+            }
+
+            object derived = null;
+            var derivedTypes = _types
+                .Select(kvp => kvp.Value.Type)
+                .Where(t => t.BaseType == type || (t.BaseType != null && t.BaseType.IsGenericType && t.BaseType.GetGenericTypeDefinition() == type))
+                .ToArray();
+            if (derivedTypes.Any())
+                derived = new LI("Derived types:", new UL(derivedTypes.Select(t => new LI(friendlyTypeName(t, true, req.BaseUrl, false)))));
+
+            yield return new UL { class_ = "typeinfo" }._(
+                new LI("Namespace: ", new A(type.Namespace) { class_ = "namespace", href = req.BaseUrl + "/" + type.Namespace.UrlEscape() }),
+                type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, true, req.BaseUrl, false)) : null,
+                typeTree,
+                derived
             );
 
             MethodInfo m = null;
             if (isDelegate)
             {
                 m = type.GetMethod("Invoke");
-                yield return new H2("Full definition");
+                yield return new H2("Declaration");
                 yield return new PRE(friendlyMethodName(m, true, false, true, true, true, true, null, req.BaseUrl, true));
             }
 
