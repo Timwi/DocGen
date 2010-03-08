@@ -74,12 +74,12 @@ namespace RT.DocGen
             .Method { font-weight: normal; }
             .sidebar { font-size: small; }
             .sidebar li { margin: 0; }
-            .sidebar div.type { padding-left: 2em; }
-            .sidebar div.member { padding-left: 2.5em; text-indent: -2.5em; }
-            .sidebar div.type > div { font-weight: normal; }
-            .sidebar div.type > div.line { font-weight: bold; padding-left: 0.5em; text-indent: -2.5em; }
+            .sidebar div.tree div.type { padding-left: 2em; }
+            .sidebar div.tree div.member { padding-left: 2.5em; text-indent: -2.5em; }
+            .sidebar div.tree div.type > div { font-weight: normal; }
+            .sidebar div.tree div.type > div.line { font-weight: bold; padding-left: 0.5em; text-indent: -2.5em; }
             .sidebar div.type span.typeicon, .sidebar div.member span.icon { display: inline-block; width: 1.5em; margin-right: 0.5em; text-indent: 0; text-align: center; color: #000; -moz-border-radius: 0.7em 0.7em 0.7em 0.7em; }
-            .sidebar div.legend div.type, .sidebar div.legend div.member { padding-left: 0; }
+            .sidebar div.legend div.type, .sidebar div.legend div.member { padding-left: 0; white-space: nowrap; }
 
             span.icon, span.typeicon { font-size: smaller; }
 
@@ -330,11 +330,15 @@ namespace RT.DocGen
             };
         }
 
-        private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces)
+        private SPAN friendlyTypeName(Type t, bool includeNamespaces)
         {
             return friendlyTypeName(t, includeNamespaces, null, false);
         }
-        private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces, string baseURL, bool inclRef)
+        private SPAN friendlyTypeName(Type t, bool includeNamespaces, string baseURL, bool inclRef)
+        {
+            return new SPAN(friendlyTypeNameInner(t, includeNamespaces, baseURL, inclRef)) { class_ = "type", title = t.FullName };
+        }
+        private IEnumerable<object> friendlyTypeNameInner(Type t, bool includeNamespaces, string baseURL, bool inclRef)
         {
             if (t.IsByRef)
             {
@@ -768,7 +772,7 @@ namespace RT.DocGen
         private object generateTypeBullet(string typeFullName, Type selectedType, HttpRequest req)
         {
             var typeinfo = _types[typeFullName];
-            string cssClass = typeinfo.GetTypeCssClass()+" type";
+            string cssClass = typeinfo.GetTypeCssClass() + " type";
             if (typeinfo.Documentation == null) cssClass += " missing";
             return new DIV { class_ = cssClass }._(new DIV(new SPAN(typeinfo.GetTypeLetters()) { class_ = "typeicon" }, new A(friendlyTypeName(typeinfo.Type, false)) { href = req.BaseUrl + "/" + typeFullName.UrlEscape() }) { class_ = "line" },
                 selectedType == null || !isNestedTypeOf(selectedType, typeinfo.Type) || typeof(Delegate).IsAssignableFrom(typeinfo.Type) ? null :
