@@ -12,10 +12,13 @@ namespace RT.DocGen
 {
     public class DocGenPropellerModule : MarshalByRefObject, IPropellerModule
     {
-        public class Settings
+        class Settings
         {
             public string Url = "/doc";
             public string[] Paths = new string[] { };
+            public bool RequireAuthentication = true;
+            [XmlIgnoreIfDefault]
+            public string UsernamePasswordFile = null;
         }
 
         private Settings _settings;
@@ -57,12 +60,19 @@ namespace RT.DocGen
             Directory.CreateDirectory(copyToPath);
 
             var paths = _settings.Paths.Where(d => Directory.Exists(d)).ToArray();
-            _docGen = new DocumentationGenerator(paths, copyToPath);
+            _docGen = new DocumentationGenerator(paths, _settings.RequireAuthentication ? _settings.UsernamePasswordFile ?? "" : null, copyToPath);
             lock (_log)
                 _log.Info("DocGen: Initialised successfully.");
+            var hooks = new List<HttpRequestHandlerHook>();
+
+            if (string.IsNullOrEmpty(_settings.Url))
+                hooks.Add(new HttpRequestHandlerHook(_docGen.Handler));
+            else
+                hooks.Add(new HttpRequestHandlerHook(_settings.Url, _docGen.Handler));
+
             return new PropellerModuleInitResult
             {
-                HandlerHooks = new HttpRequestHandlerHook[] { new HttpRequestHandlerHook(_settings.Url, _docGen.GetRequestHandler()) },
+                HandlerHooks = hooks,
                 FileFiltersToBeMonitoredForChanges = paths.Select(p => Path.Combine(p, "*.dll")).Concat(paths.Select(p => Path.Combine(p, "*.xml"))).Concat(_configFilePath)
             };
         }
