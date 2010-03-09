@@ -1183,7 +1183,7 @@ namespace RT.DocGen
                 else if (inElem.Name == "c")
                     yield return new CODE(interpretInline(inElem, req));
                 else if (inElem.Name == "paramref" && inElem.Attribute("name") != null)
-                    yield return new SPAN(new STRONG(inElem.Attribute("name").Value)) { class_ = "parameter" };
+                    yield return new SPAN(new EM(inElem.Attribute("name").Value)) { class_ = "parameter" };
                 else
                     yield return interpretInline(inElem, req);
             }
