@@ -159,7 +159,7 @@ namespace RT.DocGen
         /// </summary>
         /// <param name="paths">Paths containing DLL and XML files.</param>
         /// <param name="usernamePasswordFile">Path to a file containing usernames and password hashes. If null, access is completely unrestricted.</param>
-        public DocumentationGenerator(string[] paths, string usernamePasswordFile, bool warning) : this(paths, usernamePasswordFile, null) { }
+        public DocumentationGenerator(string[] paths, string usernamePasswordFile) : this(paths, usernamePasswordFile, null) { }
 
         /// <summary>
         /// Initialises a <see cref="DocumentationGenerator"/> instance by searching the given path for XML and DLL files.
