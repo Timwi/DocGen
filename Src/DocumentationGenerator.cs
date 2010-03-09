@@ -84,10 +84,12 @@ namespace RT.DocGen
             .sidebar div.tree div.member { padding-left: 2.5em; text-indent: -2.5em; }
             .sidebar div.tree div.type > div { font-weight: normal; }
             .sidebar div.tree div.type > div.line { font-weight: bold; padding-left: 0.5em; text-indent: -2.5em; }
-            .sidebar div.type span.typeicon, .sidebar div.member span.icon { display: inline-block; width: 1.5em; margin-right: 0.5em; text-indent: 0; text-align: center; color: #000; -moz-border-radius: 0.7em 0.7em 0.7em 0.7em; }
+            .type span.typeicon, .sidebar div.member span.icon { display: inline-block; width: 1.5em; margin-right: 0.5em; text-indent: 0; text-align: center; color: #000; -moz-border-radius: 0.7em 0.7em 0.7em 0.7em; }
             .sidebar div.legend div.type, .sidebar div.legend div.member { padding-left: 0; white-space: nowrap; }
 
             span.icon, span.typeicon { font-size: smaller; }
+            td.type span.typeicon { font-size: normal; width: 2em; }
+            td.type { font-weight: bold; white-space: nowrap; }
 
             .sidebar div.Constructor.member span.icon { background-color: #bfb; border: 2px solid #bfb; }
             .sidebar div.Method.member span.icon { background-color: #cdf; border: 2px solid #cdf; }
@@ -96,12 +98,12 @@ namespace RT.DocGen
             .sidebar div.Field.member span.icon { background-color: #ee8; border: 2px solid #ee8; }
             .sidebar div.member.missing span.icon { border-color: red; }
 
-            .sidebar div.Class.type span.typeicon { background-color: #4df; border: 2px solid #4df; }
-            .sidebar div.Struct.type span.typeicon { background-color: #f9f; border: 2px solid #f9f; }
-            .sidebar div.Enum.type span.typeicon { background-color: #4f8; border: 2px solid #4f8; }
-            .sidebar div.Interface.type span.typeicon { background-color: #f44; border: 2px solid #f44; }
-            .sidebar div.Delegate.type span.typeicon { background-color: #ff4; border: 2px solid #ff4; }
-            .sidebar div.type.missing span.typeicon { border-color: red; }
+            .Class.type span.typeicon { background-color: #4df; border: 2px solid #4df; }
+            .Struct.type span.typeicon { background-color: #f9f; border: 2px solid #f9f; }
+            .Enum.type span.typeicon { background-color: #4f8; border: 2px solid #4f8; }
+            .Interface.type span.typeicon { background-color: #f44; border: 2px solid #f44; }
+            .Delegate.type span.typeicon { background-color: #ff4; border: 2px solid #ff4; }
+            .type.missing span.typeicon { border-color: red; }
 
             .sidebar div.legend, .sidebar div.tree, .sidebar div.auth { background: #f8f8f8; border: 1px solid black; -moz-border-radius: 5px; padding: .5em; margin-bottom: .7em; }
             .sidebar div.auth { text-align: center; }
@@ -834,19 +836,18 @@ namespace RT.DocGen
         private IEnumerable<object> generateNamespaceDocumentation(string namespaceName, HttpRequest req)
         {
             yield return new H1("Namespace: ", namespaceName);
-
-            foreach (var gr in _namespaces[namespaceName].Types.Where(t => !t.Value.Type.IsNested).GroupBy(kvp => kvp.Value.Type.IsEnum ? 2 : typeof(Delegate).IsAssignableFrom(kvp.Value.Type) ? 1 : 0).OrderBy(gr => gr.Key))
-            {
-                yield return new H2(gr.Key == 0 ? "Enums in this namespace" : gr.Key == 1 ? "Delegates in this namespace" : "Classes, structs and interfaces in this namespace");
-                yield return new TABLE { class_ = "doclist" }._(
-                    gr.Select(kvp => new TR(
-                        new TD(new A(friendlyTypeName(kvp.Value.Type, false, false, true)) { href = req.BaseUrl + "/" + GetTypeFullName(kvp.Value.Type).UrlEscape() }),
+            yield return new TABLE { class_ = "doclist" }._(
+                _namespaces[namespaceName].Types.Where(t => !t.Value.Type.IsNested).Select(kvp =>
+                {
+                    string cssClass = kvp.Value.GetTypeCssClass() + " type";
+                    if (kvp.Value.Documentation == null) cssClass += " missing";
+                    return new TR(
+                        new TD { class_ = cssClass }._(new SPAN(kvp.Value.GetTypeLetters()) { class_ = "typeicon" }, new A(friendlyTypeName(kvp.Value.Type, false, false, true)) { href = req.BaseUrl + "/" + kvp.Key.UrlEscape() }),
                         new TD(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
                             ? (object) new EM("This type is not documented.")
-                            : interpretBlock(kvp.Value.Documentation.Element("summary").Nodes(), req))
-                    ))
-                );
-            }
+                            : interpretBlock(kvp.Value.Documentation.Element("summary").Nodes(), req)));
+                })
+            );
         }
 
         private IEnumerable<object> generateMemberDocumentation(MemberInfo member, XElement document, HttpRequest req)
