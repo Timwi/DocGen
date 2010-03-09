@@ -34,7 +34,10 @@
   <Target Name="Deploy" DependsOnTargets="BuildRelease">
     <Error Condition="'$(DeployPath)'==''" Text="DeployPath must be specified"/>
     <MakeDir Directories="$(DeployPath)"/>       <!-- a bit of hard-coding below to make this script a lot simpler... -->
-    <Copy SourceFiles="$(BuildsPath)\$(ProjectName)\Release-AnyCPU-Merged\DocGen.dll" DestinationFolder="$(DeployPath)"/>
+    <ItemGroup>
+      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Release-AnyCPU-Raw\*.dll"/>
+    </ItemGroup>
+    <Copy SourceFiles="@(BuildOutputs)" DestinationFolder="$(DeployPath)"/>
   </Target>
 
 </Project>
