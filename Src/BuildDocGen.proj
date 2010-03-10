@@ -30,7 +30,7 @@
   </Target>
 
 
-  <!-- DocGen-service-specific stuff -->
+  <!-- Deploy the DocGen service (release build) -->
   <Target Name="Deploy" DependsOnTargets="BuildRelease">
     <Error Condition="'$(DeployPath)'==''" Text="DeployPath must be specified"/>
     <MakeDir Directories="$(DeployPath)"/>       <!-- a bit of hard-coding below to make this script a lot simpler... -->
@@ -38,6 +38,18 @@
       <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Release-AnyCPU-Raw\*.dll"/>
     </ItemGroup>
     <Copy SourceFiles="@(BuildOutputs)" DestinationFolder="$(DeployPath)"/>
+  </Target>
+
+
+  <!-- Deploy the DocGen documentation to DocGen (debug build) -->
+  <Target Name="DeployToDocGen" DependsOnTargets="BuildDebug">
+    <Error Condition="'$(DeployToDocGenPath)'==''" Text="DeployToDocGenPath must be specified"/>
+    <MakeDir Directories="$(DeployToDocGenPath)"/>       <!-- a bit of hard-coding below to make this script a lot simpler... -->
+    <ItemGroup>
+      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\*.dll"/>
+      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\*.docs.xml"/>
+    </ItemGroup>
+    <Copy SourceFiles="@(BuildOutputs)" DestinationFolder="$(DeployToDocGenPath)"/>
   </Target>
 
 </Project>
