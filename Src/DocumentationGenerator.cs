@@ -73,11 +73,10 @@ namespace RT.DocGen
         private string _usernamePasswordFile;
 
         private static string _css = @"
-            body { font-family: ""Segoe UI"", ""Verdana"", sans-serif; font-size: 11pt; margin: .5em; }
+            body, pre { font-family: ""Segoe UI"", ""Verdana"", sans-serif; font-size: 11pt; margin: .5em; }
             .namespace { font-weight: normal; color: #888; }
             a.namespace { color: #00e; }
             a.namespace:visited { color: #551a8b; }
-            .Method { font-weight: normal; }
             .sidebar { font-size: small; }
             .sidebar li { margin: 0; }
             .sidebar div.tree div.type { padding-left: 2em; }
@@ -86,6 +85,8 @@ namespace RT.DocGen
             .sidebar div.tree div.type > div.line { font-weight: bold; padding-left: 0.5em; text-indent: -2.5em; }
             .type span.typeicon, .sidebar div.member span.icon { display: inline-block; width: 1.5em; margin-right: 0.5em; text-indent: 0; text-align: center; color: #000; -moz-border-radius: 0.7em 0.7em 0.7em 0.7em; }
             .sidebar div.legend div.type, .sidebar div.legend div.member { padding-left: 0; white-space: nowrap; }
+            .Method { font-weight: normal; background: #eee; padding: 0.1em 0.4em; }
+            .sidebar .Method { background: transparent; padding: 0; }
 
             span.icon, span.typeicon { font-size: smaller; }
             td.type span.typeicon { font-size: normal; width: 2em; }
@@ -96,7 +97,6 @@ namespace RT.DocGen
             .sidebar div.Property.member span.icon { background-color: #fcf; border: 2px solid #fcf; }
             .sidebar div.Event.member span.icon { background-color: #faa; border: 2px solid #faa; }
             .sidebar div.Field.member span.icon { background-color: #ee8; border: 2px solid #ee8; }
-            .sidebar div.member.missing span.icon { border-color: red; }
 
             .Class.type span.typeicon { background-color: #4df; border: 2px solid #4df; }
             .Struct.type span.typeicon { background-color: #f9f; border: 2px solid #f9f; }
@@ -109,6 +109,10 @@ namespace RT.DocGen
             .sidebar div.auth { text-align: center; }
             .sidebar div.legend p { text-align: center; font-weight: bold; margin: 0 0 0.4em 0; padding: 0.2em 0; background: #ddd; }
             .sidebar ul.tree { margin: .5em 0; padding: 0 0 0 2em; }
+            .sidebar div.member.highlighted { background: #bdf; }
+            .sidebar div.member.highlighted span.icon { border-color: black; }
+            .sidebar div.member.missing span.icon { border-color: red; }
+
             ul { padding-left: 1.5em; margin-bottom: 1em; }
             li { margin-top: 0.7em; margin-bottom: 0.7em; }
             li li { margin: 0; }
@@ -251,7 +255,7 @@ namespace RT.DocGen
                 if (req.RestUrlWithoutQuery == "/login")
                     return Authentication.LoginHandler(req, _usernamePasswordFile, u => session.Username = u, req.BaseUrl, "the documentation");
 
-                if (session.Username == null)
+                if (session.Username == null && _usernamePasswordFile != null)
                     return HttpServer.RedirectResponse(req.BaseUrl + "/login?returnto=" + req.Url.UrlEscape());
 
                 if (req.RestUrlWithoutQuery == "/logout")
@@ -314,7 +318,7 @@ namespace RT.DocGen
                                     new DIV { class_ = "tree" }._(
                                         new UL(_namespaces.Select(nkvp => new LI { class_ = "namespace" }._(new A(nkvp.Key) { href = req.BaseUrl + "/" + nkvp.Key.UrlEscape() },
                                             ns == null || ns != nkvp.Key ? null :
-                                            nkvp.Value.Types.Where(tkvp => !tkvp.Value.Type.IsNested).Select(tkvp => generateTypeBullet(tkvp.Key, type, req))
+                                            nkvp.Value.Types.Where(tkvp => !tkvp.Value.Type.IsNested).Select(tkvp => generateTypeBullet(tkvp.Key, type, member, req))
                                         )))
                                     ),
                                     new DIV { class_ = "legend" }._(
@@ -808,20 +812,22 @@ namespace RT.DocGen
             return getMethod == null ? property.GetSetMethod().IsStatic : getMethod.IsStatic;
         }
 
-        private object generateTypeBullet(string typeFullName, Type selectedType, HttpRequest req)
+        private object generateTypeBullet(string typeFullName, Type selectedType, MemberInfo selectedMember, HttpRequest req)
         {
             var typeinfo = _types[typeFullName];
             string cssClass = typeinfo.GetTypeCssClass() + " type";
             if (typeinfo.Documentation == null) cssClass += " missing";
+            if (typeinfo.Type == selectedType) cssClass += " highlighted";
             return new DIV { class_ = cssClass }._(new DIV(new SPAN(typeinfo.GetTypeLetters()) { class_ = "typeicon" }, new A(friendlyTypeName(typeinfo.Type, false, false, true)) { href = req.BaseUrl + "/" + typeFullName.UrlEscape() }) { class_ = "line" },
                 selectedType == null || !isNestedTypeOf(selectedType, typeinfo.Type) || typeof(Delegate).IsAssignableFrom(typeinfo.Type) ? null :
                 typeinfo.Members.Where(mkvp => isPublic(mkvp.Value.Member)).Select(mkvp =>
                 {
                     string css = mkvp.Value.Member.MemberType.ToString() + " member";
                     if (mkvp.Value.Documentation == null) css += " missing";
+                    if (mkvp.Value.Member == selectedMember) css += " highlighted";
                     return mkvp.Value.Member.MemberType != MemberTypes.NestedType
                         ? new DIV { class_ = css }._(new SPAN(mkvp.Value.Member.MemberType.ToString()[0]) { class_ = "icon" }, new A(friendlyMemberName(mkvp.Value.Member, false, false, true, false, false)) { href = req.BaseUrl + "/" + mkvp.Key.UrlEscape() })
-                        : generateTypeBullet(GetTypeFullName((Type) mkvp.Value.Member), selectedType, req);
+                        : generateTypeBullet(GetTypeFullName((Type) mkvp.Value.Member), selectedType, selectedMember, req);
                 })
             );
         }
@@ -845,7 +851,7 @@ namespace RT.DocGen
                         new TD { class_ = cssClass }._(new SPAN(kvp.Value.GetTypeLetters()) { class_ = "typeicon" }, new A(friendlyTypeName(kvp.Value.Type, false, false, true)) { href = req.BaseUrl + "/" + kvp.Key.UrlEscape() }),
                         new TD(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
                             ? (object) new EM("This type is not documented.")
-                            : interpretBlock(kvp.Value.Documentation.Element("summary").Nodes(), req)));
+                            : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req)));
                 })
             );
         }
@@ -875,18 +881,18 @@ namespace RT.DocGen
                 if (summary != null)
                 {
                     yield return new H2("Summary");
-                    yield return interpretBlock(summary.Nodes(), req);
+                    yield return interpretNodes(summary.Nodes(), req);
                 }
                 var remarks = document.Element("remarks");
                 if (remarks != null)
                 {
                     yield return new H2("Remarks");
-                    yield return interpretBlock(remarks.Nodes(), req);
+                    yield return interpretNodes(remarks.Nodes(), req);
                 }
                 foreach (var example in document.Elements("example"))
                 {
                     yield return new H2("Example");
-                    yield return interpretBlock(example.Nodes(), req);
+                    yield return interpretNodes(example.Nodes(), req);
                 }
             }
 
@@ -907,7 +913,7 @@ namespace RT.DocGen
                             ),
                             new TD(docElem == null
                                 ? (object) new EM("This parameter is not documented.")
-                                : interpretBlock(docElem.Nodes(), req))
+                                : interpretNodes(docElem.Nodes(), req))
                         );
                     })
                 );
@@ -971,7 +977,7 @@ namespace RT.DocGen
                 if (summary != null)
                 {
                     yield return new H2("Summary");
-                    yield return interpretBlock(summary.Nodes(), req);
+                    yield return interpretNodes(summary.Nodes(), req);
                 }
 
                 if (isDelegate && m.GetParameters().Any())
@@ -991,7 +997,7 @@ namespace RT.DocGen
                                 ),
                                 new TD(docElem == null
                                     ? (object) new EM("This parameter is not documented.")
-                                    : interpretBlock(docElem.Nodes(), req))
+                                    : interpretNodes(docElem.Nodes(), req))
                             );
                         })
                     );
@@ -1009,12 +1015,12 @@ namespace RT.DocGen
                 if (remarks != null)
                 {
                     yield return new H2("Remarks");
-                    yield return interpretBlock(remarks.Nodes(), req);
+                    yield return interpretNodes(remarks.Nodes(), req);
                 }
                 foreach (var example in document.Elements("example"))
                 {
                     yield return new H2("Example");
-                    yield return interpretBlock(example.Nodes(), req);
+                    yield return interpretNodes(example.Nodes(), req);
                 }
             }
 
@@ -1041,7 +1047,7 @@ namespace RT.DocGen
                             new TD { class_ = "item" }._(friendlyMemberName(kvp.Value.Member, true, false, true, true, false, false, req.BaseUrl + "/" + kvp.Key.UrlEscape(), req.BaseUrl)),
                             new TD(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
                                 ? (object) new EM("This member is not documented.")
-                                : interpretBlock(kvp.Value.Documentation.Element("summary").Nodes(), req))
+                                : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req))
                         ))
                     );
                 }
@@ -1062,7 +1068,7 @@ namespace RT.DocGen
                     return new TR(
                         new TD { class_ = "item" }._(new STRONG(gta.Name)),
                         new TD(
-                            docElem == null ? (object) new EM("This type parameter is not documented.") : interpretBlock(docElem.Nodes(), req),
+                            docElem == null ? (object) new EM("This type parameter is not documented.") : interpretNodes(docElem.Nodes(), req),
                             constraints == null || constraints.Length == 0 ? null :
                             constraints.Length > 0 ? new object[] { new BR(), new EM("Must be derived from:"), ' ', friendlyTypeName(constraints[0], true, true, req.BaseUrl, false, true), 
                                 constraints.Skip(1).Select(c => new object[] { ", ", friendlyTypeName(constraints[0], true, true, req.BaseUrl, false, true) }) } : null
@@ -1072,39 +1078,72 @@ namespace RT.DocGen
             );
         }
 
-        private IEnumerable<object> interpretBlock(IEnumerable<XNode> nodes, HttpRequest req)
+        private object interpretNodes(IEnumerable<XNode> nodes, HttpRequest req)
         {
-            using (var en = nodes.GetEnumerator())
+            return nodes.Select(n => interpretNode(n, req));
+        }
+
+        private IEnumerable<object> interpretNode(XNode node, HttpRequest req)
+        {
+            if (node is XText)
             {
-                if (!en.MoveNext()) yield break;
-                if (en.Current is XText)
-                {
-                    yield return new P(interpretInline(new XElement("para", nodes), req));
-                    yield break;
-                }
+                yield return ((XText) node).Value;
+                yield break;
+            }
 
-                foreach (var node in nodes)
-                {
-                    var elem = node is XElement ? (XElement) node : new XElement("para", node);
+            var elem = (XElement) node;
 
-                    if (elem.Name == "para")
-                        yield return new P(interpretInline(elem, req));
-                    else if (elem.Name == "list" && elem.Attribute("type") != null && elem.Attribute("type").Value == "bullet")
-                        yield return new UL(new Func<IEnumerable<object>>(() =>
+            if (elem.Name == "para")
+                yield return new P(interpretNodes(elem.Nodes(), req));
+            else if (elem.Name == "list" && elem.Attribute("type") != null && elem.Attribute("type").Value == "bullet")
+                yield return new UL(new Func<IEnumerable<object>>(() =>
+                {
+                    return elem.Elements("item").Select(e =>
+                        e.Elements("term").Any()
+                            ? (object) new LI(new STRONG(interpretNodes(e.Element("term").Nodes(), req)),
+                                e.Elements("description").Any() ? new BLOCKQUOTE(interpretNodes(e.Element("description").Nodes(), req)) : null)
+                            : e.Elements("description").Any()
+                                ? new LI(interpretNodes(e.Element("description").Nodes(), req))
+                                : null);
+                }));
+            else if (elem.Name == "code")
+                yield return new PRE(interpretPre(elem, req));
+            else if (elem.Name == "see" && elem.Attribute("cref") != null)
+            {
+                Type actual;
+                string token = elem.Attribute("cref").Value;
+                if (_types.ContainsKey(token))
+                    yield return friendlyTypeName(_types[token].Type, false, true, req.BaseUrl, false, true);
+                else if (_members.ContainsKey(token))
+                    yield return friendlyMemberName(_members[token].Member, false, false, true, false, false, false, req.BaseUrl + "/" + token.UrlEscape(), req.BaseUrl);
+                else if (token.StartsWith("T:") && (actual = Type.GetType(token.Substring(2), false, true)) != null)
+                {
+                    yield return actual.Namespace;
+                    yield return ".";
+                    yield return new STRONG(Regex.Replace(actual.Name, "`\\d+", string.Empty));
+                    if (actual.IsGenericType)
+                    {
+                        yield return "<";
+                        yield return actual.GetGenericArguments().First().Name;
+                        foreach (var gen in actual.GetGenericArguments().Skip(1))
                         {
-                            return elem.Elements("item").Select(e =>
-                                e.Elements("term").Any()
-                                    ? (object) new LI(new STRONG(interpretInline(e.Element("term"), req)),
-                                        e.Elements("description").Any() ? new BLOCKQUOTE(interpretInline(e.Element("description"), req)) : null)
-                                    : e.Elements("description").Any()
-                                        ? (object) new LI(e.Element("description").FirstNode is XText ? interpretInline(e.Element("description"), req) : interpretBlock(e.Element("description").Nodes(), req))
-                                        : null);
-                        }));
-                    else if (elem.Name == "code")
-                        yield return new PRE(interpretPre(elem, req));
-                    else
-                        yield return "Unknown element name: " + elem.Name;
+                            yield return ", ";
+                            yield return gen.Name;
+                        }
+                        yield return ">";
+                    }
                 }
+                else
+                    yield return token.Substring(2);
+            }
+            else if (elem.Name == "c")
+                yield return new CODE(interpretNodes(elem.Nodes(), req));
+            else if (elem.Name == "paramref" && elem.Attribute("name") != null)
+                yield return new SPAN(new EM(elem.Attribute("name").Value)) { class_ = "parameter" };
+            else
+            {
+                yield return @"[Unrecognised tag: ""{0}""]".Fmt(elem.Name);
+                yield return interpretNodes(elem.Nodes(), req);
             }
         }
 
@@ -1115,7 +1154,7 @@ namespace RT.DocGen
 
             // Step 1: Turn all the text nodes into strings, split them at the newlines, then add the newlines back in; turn all the non-text nodes into HTML
             // Example is now: { "", E.N, "    XYZ", [code element], E.N, E.N, "    ABC" }       (E.N stands for Environment.NewLine)
-            var everything = elem.Nodes().SelectMany(nod => nod is XText ? Regex.Split(((XText) nod).Value, @"\r\n|\r|\n").SelectMany(lin => new string[] { Environment.NewLine, lin.TrimEnd() }).Skip(1).Cast<object>() : interpretInlineNode((XElement) nod, req));
+            var everything = elem.Nodes().SelectMany(nod => nod is XText ? Regex.Split(((XText) nod).Value, @"\r\n|\r|\n").SelectMany(lin => new string[] { Environment.NewLine, lin.TrimEnd() }).Skip(1).Cast<object>() : interpretNode((XElement) nod, req));
 
             // Step 2: Split the collection at the newlines, giving a set of lines which contain strings and HTML elements
             // Example is now: { { "" }, { "    XYZ", [code element] }, { }, { "    ABC" } }
@@ -1137,56 +1176,6 @@ namespace RT.DocGen
             // The call to Trim() at the end removes empty strings at beginning and end.
             // Result in the example is thus: { E.N, "XYZ", [code element], "\r\n", "\r\n", "ABC" }
             return lines.SelectMany(lin => ((object) Environment.NewLine).Concat(((object) ((string) lin.First()).SubstringSafe(commonIndentation.Value)).Concat(lin.Skip(1)))).Skip(1).Trim();
-        }
-
-        private IEnumerable<object> interpretInline(XElement elem, HttpRequest req)
-        {
-            foreach (var node in elem.Nodes())
-                yield return interpretInlineNode(node, req);
-        }
-
-        private IEnumerable<object> interpretInlineNode(XNode node, HttpRequest req)
-        {
-            if (node is XText)
-                yield return ((XText) node).Value;
-            else
-            {
-                var inElem = node as XElement;
-                if (inElem.Name == "see" && inElem.Attribute("cref") != null)
-                {
-                    Type actual;
-                    string token = inElem.Attribute("cref").Value;
-                    if (_types.ContainsKey(token))
-                        yield return friendlyTypeName(_types[token].Type, false, true, req.BaseUrl, false, true);
-                    else if (_members.ContainsKey(token))
-                        yield return friendlyMemberName(_members[token].Member, false, false, true, false, false, false, req.BaseUrl + "/" + token.UrlEscape(), req.BaseUrl);
-                    else if (token.StartsWith("T:") && (actual = Type.GetType(token.Substring(2), false, true)) != null)
-                    {
-                        yield return actual.Namespace;
-                        yield return ".";
-                        yield return new STRONG(Regex.Replace(actual.Name, "`\\d+", string.Empty));
-                        if (actual.IsGenericType)
-                        {
-                            yield return "<";
-                            yield return actual.GetGenericArguments().First().Name;
-                            foreach (var gen in actual.GetGenericArguments().Skip(1))
-                            {
-                                yield return ", ";
-                                yield return gen.Name;
-                            }
-                            yield return ">";
-                        }
-                    }
-                    else
-                        yield return token.Substring(2);
-                }
-                else if (inElem.Name == "c")
-                    yield return new CODE(interpretInline(inElem, req));
-                else if (inElem.Name == "paramref" && inElem.Attribute("name") != null)
-                    yield return new SPAN(new EM(inElem.Attribute("name").Value)) { class_ = "parameter" };
-                else
-                    yield return interpretInline(inElem, req);
-            }
         }
     }
 }
