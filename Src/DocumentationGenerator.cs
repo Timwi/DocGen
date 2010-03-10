@@ -90,8 +90,8 @@ namespace RT.DocGen
             .sidebar div.tree div.type > div.line { font-weight: bold; padding-left: 0.5em; text-indent: -2.5em; }
             .type span.typeicon, .sidebar div.member span.icon { display: inline-block; width: 1.5em; margin-right: 0.5em; text-indent: 0; text-align: center; color: #000; -moz-border-radius: 0.7em 0.7em 0.7em 0.7em; }
             .sidebar div.legend div.type, .sidebar div.legend div.member { padding-left: 0; white-space: nowrap; }
-            .Method { font-weight: normal; background: #eee; padding: 0.1em 0.4em; }
-            .sidebar .Method { background: transparent; padding: 0; }
+            .Method { font-weight: normal; background: #eee; padding: 0.1em; }
+            .sidebar .Method, pre .Method, table.doclist td.item .Method { background: transparent; padding: 0; }
 
             span.icon, span.typeicon { font-size: smaller; }
             td.type span.typeicon { font-size: normal; width: 2em; }
@@ -126,6 +126,7 @@ namespace RT.DocGen
             table.layout td { vertical-align: top; padding: 0; }
             table.layout td.content { width: 100%; padding: 1em 1em 0em 1.5em; }
             table.doclist td { border: 1px solid #ccc; padding: 1em 2em; background: #eee; }
+            table.usertable td { padding: 0.2em 0.8em; }
             td p:first-child { margin-top: 0; }
             td p:last-child { margin-bottom: 0; }
             span.parameter, span.member { white-space: nowrap; }
@@ -457,8 +458,7 @@ namespace RT.DocGen
                 }
                 else if (includeNamespaces && !t.IsGenericParameter)
                 {
-                    yield return new SPAN(t.Namespace) { class_ = "namespace" };
-                    yield return ".";
+                    yield return new SPAN(t.Namespace, ".") { class_ = "namespace" };
                 }
 
                 // Determine whether this type has its own generic type parameters.
@@ -909,6 +909,18 @@ namespace RT.DocGen
                     yield return new H2("Summary");
                     yield return interpretNodes(summary.Nodes(), req);
                 }
+                var returns = document.Element("returns");
+                if (returns != null)
+                {
+                    yield return new H2("Returns");
+                    yield return interpretNodes(returns.Nodes(), req);
+                }
+                var exceptions = document.Elements("exception").Where(elem => elem.Attribute("cref") != null);
+                if (exceptions.Any())
+                {
+                    yield return new H2("Exceptions");
+                    yield return new UL(exceptions.Select(exc => new LI(interpretCref(exc.Attribute("cref").Value, req, true), new BLOCKQUOTE(interpretNodes(exc.Nodes(), req)))));
+                }
                 var remarks = document.Element("remarks");
                 if (remarks != null)
                 {
@@ -919,6 +931,12 @@ namespace RT.DocGen
                 {
                     yield return new H2("Example");
                     yield return interpretNodes(example.Nodes(), req);
+                }
+                var seealsos = document.Elements("see").Concat(document.Elements("seealso"));
+                if (seealsos.Any())
+                {
+                    yield return new H2("See also");
+                    yield return new UL(seealsos.Select(sa => new LI(interpretCref(sa.Attribute("cref").Value, req, true))));
                 }
             }
 
@@ -961,7 +979,7 @@ namespace RT.DocGen
             );
 
             LI typeTree = null;
-            if (!type.IsAbstract || !type.IsSealed || type.IsInterface)
+            if ((!type.IsAbstract || !type.IsSealed) && !type.IsInterface)
             {
                 var typeRecurse = type;
                 while (typeRecurse != null)
@@ -971,20 +989,32 @@ namespace RT.DocGen
                     typeRecurse = typeRecurse.BaseType;
                 }
             }
+            LI interfaces = null;
+            var infs = type.GetInterfaces();
+            if (infs.Any())
+                interfaces = new LI("Implements:", new UL(infs.Select(i => new LI(friendlyTypeName(i, true, true, true)))));
 
             object derived = null;
-            var derivedTypes = _types
-                .Select(kvp => kvp.Value.Type)
-                .Where(t => t.BaseType == type || (t.BaseType != null && t.BaseType.IsGenericType && t.BaseType.GetGenericTypeDefinition() == type))
-                .ToArray();
-            if (derivedTypes.Any())
-                derived = new LI("Derived types:", new UL(derivedTypes.Select(t => new LI(friendlyTypeName(t, true, true, req.BaseUrl, false, true)))));
+            if (type.IsInterface)
+            {
+                var implementedBy = _types.Select(kvp => kvp.Value.Type).Where(t => t.GetInterfaces().Contains(type)).ToArray();
+                if (implementedBy.Any())
+                    derived = new LI("Implemented by:", new UL(implementedBy.Select(t => new LI(friendlyTypeName(t, true, true, req.BaseUrl, false, true)))));
+            }
+            else
+            {
+                var derivedTypes = _types
+                    .Select(kvp => kvp.Value.Type)
+                    .Where(t => t.BaseType == type || (t.BaseType != null && t.BaseType.IsGenericType && t.BaseType.GetGenericTypeDefinition() == type))
+                    .ToArray();
+                if (derivedTypes.Any())
+                    derived = new LI("Derived types:", new UL(derivedTypes.Select(t => new LI(friendlyTypeName(t, true, true, req.BaseUrl, false, true)))));
+            }
 
             yield return new UL { class_ = "typeinfo" }._(
                 new LI("Namespace: ", new A(type.Namespace) { class_ = "namespace", href = req.BaseUrl + "/" + type.Namespace.UrlEscape() }),
                 type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, true, true, req.BaseUrl, false, true)) : null,
-                typeTree,
-                derived
+                typeTree, interfaces, derived
             );
 
             MethodInfo m = null;
@@ -1122,46 +1152,25 @@ namespace RT.DocGen
             if (elem.Name == "para")
                 yield return new P(interpretNodes(elem.Nodes(), req));
             else if (elem.Name == "list" && elem.Attribute("type") != null && elem.Attribute("type").Value == "bullet")
-                yield return new UL(new Func<IEnumerable<object>>(() =>
-                {
-                    return elem.Elements("item").Select(e =>
-                        e.Elements("term").Any()
-                            ? (object) new LI(new STRONG(interpretNodes(e.Element("term").Nodes(), req)),
-                                e.Elements("description").Any() ? new BLOCKQUOTE(interpretNodes(e.Element("description").Nodes(), req)) : null)
-                            : e.Elements("description").Any()
-                                ? new LI(interpretNodes(e.Element("description").Nodes(), req))
-                                : null);
-                }));
+                yield return new UL(elem.Elements("item").Select(e =>
+                    e.Elements("term").Any()
+                        ? (object) new LI(new STRONG(interpretNodes(e.Element("term").Nodes(), req)),
+                            e.Elements("description").Any() ? new BLOCKQUOTE(interpretNodes(e.Element("description").Nodes(), req)) : null)
+                        : e.Elements("description").Any()
+                            ? new LI(interpretNodes(e.Element("description").Nodes(), req))
+                            : null
+                ));
+            else if (elem.Name == "list" && elem.Attribute("type") != null && elem.Attribute("type").Value == "table")
+                yield return new TABLE { class_ = "usertable" }._(elem.Elements("item").Select(e =>
+                    new TR(
+                        new TD(new STRONG(interpretNodes(e.Element("term").Nodes(), req))),
+                        new TD(interpretNodes(e.Element("description").Nodes(), req))
+                    )
+                ));
             else if (elem.Name == "code")
                 yield return new PRE(interpretPre(elem, req));
             else if (elem.Name == "see" && elem.Attribute("cref") != null)
-            {
-                Type actual;
-                string token = elem.Attribute("cref").Value;
-                if (_types.ContainsKey(token))
-                    yield return friendlyTypeName(_types[token].Type, false, true, req.BaseUrl, false, true);
-                else if (_members.ContainsKey(token))
-                    yield return friendlyMemberName(_members[token].Member, false, false, true, false, false, false, req.BaseUrl + "/" + token.UrlEscape(), req.BaseUrl);
-                else if (token.StartsWith("T:") && (actual = Type.GetType(token.Substring(2), false, true)) != null)
-                {
-                    yield return actual.Namespace;
-                    yield return ".";
-                    yield return new STRONG(Regex.Replace(actual.Name, "`\\d+", string.Empty));
-                    if (actual.IsGenericType)
-                    {
-                        yield return "<";
-                        yield return actual.GetGenericArguments().First().Name;
-                        foreach (var gen in actual.GetGenericArguments().Skip(1))
-                        {
-                            yield return ", ";
-                            yield return gen.Name;
-                        }
-                        yield return ">";
-                    }
-                }
-                else
-                    yield return token.Substring(2);
-            }
+                yield return interpretCref(elem.Attribute("cref").Value, req, false);
             else if (elem.Name == "c")
                 yield return new CODE(interpretNodes(elem.Nodes(), req));
             else if (elem.Name == "paramref" && elem.Attribute("name") != null)
@@ -1170,6 +1179,38 @@ namespace RT.DocGen
             {
                 yield return @"[Unrecognised tag: ""{0}""]".Fmt(elem.Name);
                 yield return interpretNodes(elem.Nodes(), req);
+            }
+        }
+
+        private object interpretCref(string token, HttpRequest req, bool includeNamespaces)
+        {
+            Type actual;
+            if (_types.ContainsKey(token))
+                return friendlyTypeName(_types[token].Type, includeNamespaces, true, req.BaseUrl, false, true);
+            else if (_members.ContainsKey(token))
+                return friendlyMemberName(_members[token].Member, false, false, true, false, includeNamespaces, false, req.BaseUrl + "/" + token.UrlEscape(), req.BaseUrl);
+            else if (token.StartsWith("T:") && (actual = Type.GetType(token.Substring(2), false, true)) != null)
+                return new SPAN(foreignTypeName(actual, includeNamespaces)) { class_ = "type", title = actual.FullName };
+            else
+                return new SPAN(token.Substring(2)) { class_ = "type" };
+        }
+
+        private IEnumerable<object> foreignTypeName(Type type, bool includeNamespaces)
+        {
+            if (includeNamespaces)
+                yield return type.Namespace;
+            yield return ".";
+            yield return new STRONG(Regex.Replace(type.Name, "`\\d+", string.Empty));
+            if (type.IsGenericType)
+            {
+                yield return "<";
+                yield return type.GetGenericArguments().First().Name;
+                foreach (var gen in type.GetGenericArguments().Skip(1))
+                {
+                    yield return ", ";
+                    yield return gen.Name;
+                }
+                yield return ">";
             }
         }
 
