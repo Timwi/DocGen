@@ -62,7 +62,16 @@ namespace RT.DocGen
             var paths = _settings.Paths.Where(d => Directory.Exists(d)).ToArray();
             _docGen = new DocumentationGenerator(paths, _settings.RequireAuthentication ? _settings.UsernamePasswordFile ?? "" : null, copyToPath);
             lock (_log)
-                _log.Info("DocGen: Initialised successfully.");
+            {
+                _log.Info("DocGen initialised.");
+                _log.Info("{0} assemblies loaded: {1}".Fmt(_docGen.AssembliesLoaded.Count, _docGen.AssembliesLoaded.JoinString(", ")));
+                if (_docGen.AssemblyLoadErrors.Count > 0)
+                {
+                    _log.Warn("{0} assembly load errors:".Fmt(_docGen.AssemblyLoadErrors.Count));
+                    foreach (var tuple in _docGen.AssemblyLoadErrors)
+                        _log.Warn("{0} error: {1}".Fmt(tuple.E1, tuple.E2));
+                }
+            }
             var hooks = new List<HttpRequestHandlerHook>();
 
             if (string.IsNullOrEmpty(_settings.Url))

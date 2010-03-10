@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using RT.Servers;
 using RT.TagSoup.HtmlTags;
+using RT.Util.Collections;
 using RT.Util.ExtensionMethods;
 using RT.Util.Streams;
 
@@ -71,6 +72,10 @@ namespace RT.DocGen
         private SortedDictionary<string, typeInfo> _types;
         private SortedDictionary<string, memberInfo> _members;
         private string _usernamePasswordFile;
+        private List<string> _assembliesLoaded = new List<string>();
+        public List<string> AssembliesLoaded { get { return _assembliesLoaded; } }
+        private List<Tuple<string, string>> _assemblyLoadErrors = new List<Tuple<string, string>>();
+        public List<Tuple<string, string>> AssemblyLoadErrors { get { return _assemblyLoadErrors; } }
 
         private static string _css = @"
             body, pre { font-family: ""Segoe UI"", ""Verdana"", sans-serif; font-size: 11pt; margin: .5em; }
@@ -182,51 +187,72 @@ namespace RT.DocGen
 
             foreach (var path in paths)
             {
-                foreach (var f in new DirectoryInfo(path).GetFiles("*.dll").Where(f => File.Exists(f.FullName.Remove(f.FullName.Length - 3) + "docs.xml")))
+                // We need to copy all the DLLs files, even those that have no documentation, because they might be a dependency of ones of those that do
+                var dllFiles = new DirectoryInfo(path).GetFiles("*.dll");
+                if (copyDllFilesTo != null)
+                    foreach (var dllFile in dllFiles)
+                        File.Copy(dllFile.FullName, Path.Combine(copyDllFilesTo, dllFile.Name));
+
+                AppDomain.CurrentDomain.AssemblyResolve += (s, e) =>
                 {
-                    var docsFile = f.FullName.Remove(f.FullName.Length - 3) + "docs.xml";
-                    Assembly a;
-                    if (copyDllFilesTo != null)
+                    var actualAssemblyName = new AssemblyName(e.Name).Name;
+                    var prospectiveAssemblyPath = Path.Combine(copyDllFilesTo == null ? path : copyDllFilesTo, actualAssemblyName + ".dll");
+                    if (File.Exists(prospectiveAssemblyPath))
+                        return Assembly.LoadFrom(prospectiveAssemblyPath);
+                    prospectiveAssemblyPath = Path.Combine(copyDllFilesTo == null ? path : copyDllFilesTo, actualAssemblyName + ".exe");
+                    if (File.Exists(prospectiveAssemblyPath))
+                        return Assembly.LoadFrom(prospectiveAssemblyPath);
+                    return null;
+                };
+
+                foreach (var f in dllFiles.Where(f => File.Exists(f.FullName.Remove(f.FullName.Length - 3) + "docs.xml")))
+                {
+                    string loadFromFile = copyDllFilesTo != null ? Path.Combine(copyDllFilesTo, f.Name) : f.FullName;
+                    try
                     {
-                        var newFullPath = Path.Combine(copyDllFilesTo, f.Name);
-                        File.Copy(f.FullName, newFullPath);
-                        a = Assembly.LoadFile(newFullPath);
-                    }
-                    else
-                        a = Assembly.LoadFile(f.FullName);
-                    XElement e = XElement.Load(docsFile);
-                    foreach (var t in a.GetExportedTypes().Where(t => shouldTypeBeDisplayed(t)))
-                    {
-                        var typeFullName = GetTypeFullName(t);
-                        XElement doc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == typeFullName);
+                        var docsFile = f.FullName.Remove(f.FullName.Length - 3) + "docs.xml";
+                        Assembly a = Assembly.LoadFile(loadFromFile);
+                        XElement e = XElement.Load(docsFile);
 
-                        if (!_namespaces.ContainsKey(t.Namespace))
-                            _namespaces[t.Namespace] = new namespaceInfo { Types = new SortedDictionary<string, typeInfo>() };
-
-                        var typeinfo = new typeInfo { Type = t, Documentation = doc, Members = new SortedDictionary<string, memberInfo>(new memberComparer()) };
-
-                        foreach (var mem in t.GetMembers(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
-                            .Where(m => m.DeclaringType == t && shouldMemberBeDisplayed(m)))
+                        foreach (var t in a.GetExportedTypes().Where(t => shouldTypeBeDisplayed(t)))
                         {
-                            var dcmn = documentationCompatibleMemberName(mem);
-                            XElement mdoc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == dcmn);
+                            var typeFullName = GetTypeFullName(t);
+                            XElement doc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == typeFullName);
 
-                            // Special case: if it's an automatically-generated public default constructor without documentation, auto-generate documentation for it
-                            if (mem is ConstructorInfo && mdoc == null)
+                            if (!_namespaces.ContainsKey(t.Namespace))
+                                _namespaces[t.Namespace] = new namespaceInfo { Types = new SortedDictionary<string, typeInfo>() };
+
+                            var typeinfo = new typeInfo { Type = t, Documentation = doc, Members = new SortedDictionary<string, memberInfo>(new memberComparer()) };
+
+                            foreach (var mem in t.GetMembers(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
+                                .Where(m => m.DeclaringType == t && shouldMemberBeDisplayed(m)))
                             {
-                                var c = (ConstructorInfo) mem;
-                                if (c.IsPublic && c.GetParameters().Length == 0)
-                                    mdoc = new XElement("member", new XAttribute("name", dcmn), new XElement("summary", "Creates a new instance of ", new XElement("see", new XAttribute("cref", typeFullName)), "."));
+                                var dcmn = documentationCompatibleMemberName(mem);
+                                XElement mdoc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == dcmn);
+
+                                // Special case: if it's an automatically-generated public default constructor without documentation, auto-generate documentation for it
+                                if (mem is ConstructorInfo && mdoc == null)
+                                {
+                                    var c = (ConstructorInfo) mem;
+                                    if (c.IsPublic && c.GetParameters().Length == 0)
+                                        mdoc = new XElement("member", new XAttribute("name", dcmn), new XElement("summary", "Creates a new instance of ", new XElement("see", new XAttribute("cref", typeFullName)), "."));
+                                }
+
+                                var memDoc = new memberInfo { Member = mem, Documentation = mdoc };
+                                typeinfo.Members[dcmn] = memDoc;
+                                _members[dcmn] = memDoc;
                             }
 
-                            var memDoc = new memberInfo { Member = mem, Documentation = mdoc };
-                            typeinfo.Members[dcmn] = memDoc;
-                            _members[dcmn] = memDoc;
+                            _namespaces[t.Namespace].Types[typeFullName] = typeinfo;
+                            _types[typeFullName] = typeinfo;
                         }
-
-                        _namespaces[t.Namespace].Types[typeFullName] = typeinfo;
-                        _types[typeFullName] = typeinfo;
                     }
+                    catch (Exception exc)
+                    {
+                        _assemblyLoadErrors.Add(new Tuple<string, string>(loadFromFile, exc.Message + " (" + exc.GetType().FullName + ")"));
+                        continue;
+                    }
+                    _assembliesLoaded.Add(loadFromFile);
                 }
             }
         }
