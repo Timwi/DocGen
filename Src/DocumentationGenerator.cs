@@ -1198,8 +1198,10 @@ namespace RT.DocGen
         private IEnumerable<object> foreignTypeName(Type type, bool includeNamespaces)
         {
             if (includeNamespaces)
+            {
                 yield return type.Namespace;
-            yield return ".";
+                yield return ".";
+            }
             yield return new STRONG(Regex.Replace(type.Name, "`\\d+", string.Empty));
             if (type.IsGenericType)
             {
