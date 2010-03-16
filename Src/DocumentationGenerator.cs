@@ -90,7 +90,7 @@ namespace RT.DocGen
             .sidebar div.tree div.type > div.line { font-weight: bold; padding-left: 0.5em; text-indent: -2.5em; }
             .type span.typeicon, .sidebar div.member span.icon { display: inline-block; width: 1.5em; margin-right: 0.5em; text-indent: 0; text-align: center; color: #000; -moz-border-radius: 0.7em 0.7em 0.7em 0.7em; }
             .sidebar div.legend div.type, .sidebar div.legend div.member { padding-left: 0; white-space: nowrap; }
-            .Method { font-weight: normal; background: #eee; padding: 0.1em; }
+            .Method, code { font-family: inherit; font-weight: normal; background: #eee; padding: 0.1em; }
             .sidebar .Method, pre .Method, table.doclist td.item .Method { background: transparent; padding: 0; }
 
             span.icon, span.typeicon { font-size: smaller; }
@@ -978,43 +978,12 @@ namespace RT.DocGen
                 friendlyTypeName(type, true, true, true)
             );
 
-            LI typeTree = null;
-            if ((!type.IsAbstract || !type.IsSealed) && !type.IsInterface)
-            {
-                var typeRecurse = type;
-                while (typeRecurse != null)
-                {
-                    var ftn = friendlyTypeName(typeRecurse, true, true, typeRecurse == type ? null : req.BaseUrl, false, true);
-                    typeTree = new LI(typeRecurse == typeof(object) ? "Inheritance:" : typeRecurse == type ? (object) new STRONG(ftn) : ftn, typeRecurse.IsSealed ? " (sealed)" : null, typeTree == null ? null : new UL(typeTree));
-                    typeRecurse = typeRecurse.BaseType;
-                }
-            }
-            LI interfaces = null;
-            var infs = type.GetInterfaces();
-            if (infs.Any())
-                interfaces = new LI("Implements:", new UL(infs.Select(i => new LI(friendlyTypeName(i, true, true, true)))));
-
-            object derived = null;
-            if (type.IsInterface)
-            {
-                var implementedBy = _types.Select(kvp => kvp.Value.Type).Where(t => t.GetInterfaces().Contains(type)).ToArray();
-                if (implementedBy.Any())
-                    derived = new LI("Implemented by:", new UL(implementedBy.Select(t => new LI(friendlyTypeName(t, true, true, req.BaseUrl, false, true)))));
-            }
-            else
-            {
-                var derivedTypes = _types
-                    .Select(kvp => kvp.Value.Type)
-                    .Where(t => t.BaseType == type || (t.BaseType != null && t.BaseType.IsGenericType && t.BaseType.GetGenericTypeDefinition() == type))
-                    .ToArray();
-                if (derivedTypes.Any())
-                    derived = new LI("Derived types:", new UL(derivedTypes.Select(t => new LI(friendlyTypeName(t, true, true, req.BaseUrl, false, true)))));
-            }
-
             yield return new UL { class_ = "typeinfo" }._(
                 new LI("Namespace: ", new A(type.Namespace) { class_ = "namespace", href = req.BaseUrl + "/" + type.Namespace.UrlEscape() }),
                 type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, true, true, req.BaseUrl, false, true)) : null,
-                typeTree, interfaces, derived
+                inheritsFrom(type, req),
+                implementsInterfaces(type, req),
+                type.IsInterface ? implementedBy(type, req) : derivedTypes(type, req)
             );
 
             MethodInfo m = null;
@@ -1108,6 +1077,72 @@ namespace RT.DocGen
                     );
                 }
             }
+        }
+
+        private LI inheritsFrom(Type type, HttpRequest req)
+        {
+            if ((type.IsAbstract && type.IsSealed) || type.IsInterface)
+                return null;
+
+            return new LI(
+                new A("Show inherited types...") { href = "#", onclick = "document.getElementById('inherited_link').style.display='none';document.getElementById('inherited_tree').style.display='block';return false;", id = "inherited_link" },
+                new DIV { id = "inherited_tree", style = "display:none" }._(
+                    "Inherits from:",
+                    inheritsFromBullet(type.BaseType, req)
+                ));
+        }
+
+        private object inheritsFromBullet(Type type, HttpRequest req)
+        {
+            if (type == null)
+                return null;
+            return new UL(new LI(friendlyTypeName(type, true, true, req.BaseUrl, false, true), type.IsSealed ? " (sealed)" : null, inheritsFromBullet(type.BaseType, req)));
+        }
+
+        private LI implementsInterfaces(Type type, HttpRequest req)
+        {
+            var infs = type.GetInterfaces();
+            if (!infs.Any())
+                return null;
+            return new LI(
+                new A("Show implemented interfaces...") { href = "#", onclick = "document.getElementById('implements_link').style.display='none';document.getElementById('implements_tree').style.display='block';return false;", id = "implements_link" },
+                new DIV { id = "implements_tree", style = "display:none" }._(
+                    "Implements:", new UL(infs
+                        .Select(i => new { Interface = i, Directly = type.BaseType == null || !type.BaseType.GetInterfaces().Any(i2 => i2.Equals(i)) })
+                        .OrderBy(inf => inf.Directly ? 0 : 1).ThenBy(inf => inf.Interface.Name)
+                        .Select(inf => new LI(friendlyTypeName(inf.Interface, true, true, req.BaseUrl, false, true), inf.Directly ? " (directly)" : null))
+                    )
+                )
+            );
+        }
+
+        private LI implementedBy(Type type, HttpRequest req)
+        {
+            var implementedBy = _types.Select(kvp => kvp.Value.Type).Where(t => t.GetInterfaces().Any(i => i.Equals(type) || (i.IsGenericType && i.GetGenericTypeDefinition().Equals(type)))).ToArray();
+            if (!implementedBy.Any())
+                return null;
+            return new LI(
+                new A("Show types that implement this interface...") { href = "#", onclick = "document.getElementById('implementedby_link').style.display='none';document.getElementById('implementedby_tree').style.display='block';return false;", id = "implementedby_link" },
+                new DIV { id = "implementedby_tree", style = "display:none" }._(
+                    "Implemented by:", new UL(implementedBy.Select(t => new LI(friendlyTypeName(t, true, true, req.BaseUrl, false, true))))
+                )
+            );
+        }
+
+        private LI derivedTypes(Type type, HttpRequest req)
+        {
+            var derivedTypes = _types.Select(kvp => kvp.Value.Type)
+                .Where(t => t.BaseType == type || (t.BaseType != null && t.BaseType.IsGenericType && t.BaseType.GetGenericTypeDefinition() == type))
+                .ToArray();
+            if (!derivedTypes.Any())
+                return null;
+
+            return new LI(
+                new A("Show derived types...") { href = "#", onclick = "document.getElementById('derivedtypes_link').style.display='none';document.getElementById('derivedtypes_tree').style.display='block';return false;", id = "derivedtypes_link" },
+                new DIV { id = "derivedtypes_tree", style = "display:none" }._(
+                    "Derived types:", new UL(derivedTypes.Select(t => new LI(friendlyTypeName(t, true, true, req.BaseUrl, false, true))))
+                )
+            );
         }
 
         private IEnumerable<object> generateGenericTypeParameterTable(Type[] genericTypeArguments, XElement document, HttpRequest req)
