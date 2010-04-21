@@ -77,7 +77,7 @@ namespace RT.DocGen
             if (string.IsNullOrEmpty(_settings.Url))
                 hooks.Add(new HttpRequestHandlerHook(_docGen.Handler));
             else
-                hooks.Add(new HttpRequestHandlerHook(_settings.Url, _docGen.Handler));
+                hooks.Add(new HttpRequestHandlerHook(_docGen.Handler, path: _settings.Url));
 
             return new PropellerModuleInitResult
             {
