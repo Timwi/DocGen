@@ -630,6 +630,7 @@ namespace RT.DocGen
                     first = false;
                     var f = new object[] {
                         parameterTypes && p.IsOut ? "out " : null,
+                        parameterTypes && p.IsDefined<ParamArrayAttribute>() ? "params " : null,
                         parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef:!p.IsOut, span:!stringOnly) : null,
                         parameterTypes && parameterNames ? " " : null,
                         parameterNames ? (stringOnly ? (object) p.Name : new STRONG(p.Name)) : null
