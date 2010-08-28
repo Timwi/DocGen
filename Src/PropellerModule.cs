@@ -69,7 +69,7 @@ namespace RT.DocGen
                 {
                     _log.Warn("{0} assembly load errors:".Fmt(_docGen.AssemblyLoadErrors.Count));
                     foreach (var tuple in _docGen.AssemblyLoadErrors)
-                        _log.Warn("{0} error: {1}".Fmt(tuple.E1, tuple.E2));
+                        _log.Warn("{0} error: {1}".Fmt(tuple.Item1, tuple.Item2));
                 }
             }
             var hooks = new List<HttpRequestHandlerHook>();

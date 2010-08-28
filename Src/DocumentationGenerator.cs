@@ -75,8 +75,8 @@ namespace RT.DocGen
         private string _usernamePasswordFile;
         private List<string> _assembliesLoaded = new List<string>();
         public List<string> AssembliesLoaded { get { return _assembliesLoaded; } }
-        private List<RT.Util.ObsoleteTuple.Tuple<string, string>> _assemblyLoadErrors = new List<RT.Util.ObsoleteTuple.Tuple<string, string>>();
-        public List<RT.Util.ObsoleteTuple.Tuple<string, string>> AssemblyLoadErrors { get { return _assemblyLoadErrors; } }
+        private List<Tuple<string, string>> _assemblyLoadErrors = new List<Tuple<string, string>>();
+        public List<Tuple<string, string>> AssemblyLoadErrors { get { return _assemblyLoadErrors; } }
 
         private static string _css = @"
             body, pre { font-family: ""Segoe UI"", ""Verdana"", sans-serif; font-size: 11pt; margin: .5em; }
@@ -235,7 +235,7 @@ namespace RT.DocGen
                     }
                     catch (Exception exc)
                     {
-                        _assemblyLoadErrors.Add(new RT.Util.ObsoleteTuple.Tuple<string, string>(loadFromFile, exc.Message + " (" + exc.GetType().FullName + ")"));
+                        _assemblyLoadErrors.Add(Tuple.Create(loadFromFile, exc.Message + " (" + exc.GetType().FullName + ")"));
                         continue;
                     }
                     _assembliesLoaded.Add(loadFromFile);
