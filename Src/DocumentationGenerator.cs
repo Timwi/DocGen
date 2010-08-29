@@ -157,7 +157,7 @@ namespace RT.DocGen
         }
 
         /// <summary>
-        /// Initialises a <see cref="DocumentationGenerator"/> instance by searching the given path for XML and DLL files.
+        /// Initialises a <see cref="DocumentationGenerator"/> instance by searching the given paths for XML and DLL files.
         /// All pairs of matching <c>*.dll</c> and <c>*.docs.xml</c> files are considered for documentation. The classes are extracted
         /// from the DLLs and grouped by namespaces.
         /// </summary>
@@ -202,7 +202,7 @@ namespace RT.DocGen
 
                         foreach (var t in a.GetExportedTypes().Where(t => shouldTypeBeDisplayed(t)))
                         {
-                            var typeFullName = GetTypeFullName(t);
+                            var typeFullName = getTypeFullName(t);
                             XElement doc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == typeFullName);
 
                             if (!_namespaces.ContainsKey(t.Namespace))
@@ -243,7 +243,7 @@ namespace RT.DocGen
             }
         }
 
-        private string GetTypeFullName(Type t)
+        private string getTypeFullName(Type t)
         {
             return "T:" + (t.IsGenericType ? t.GetGenericTypeDefinition() : t).FullName.TrimEnd('&').Replace("+", ".");
         }
@@ -257,10 +257,10 @@ namespace RT.DocGen
         public HttpResponse Handler(HttpRequest req)
         {
             if (req.RestUrlWithoutQuery == "")
-                return HttpServer.RedirectResponse(req.BaseUrl + "/");
+                return HttpResponse.Redirect(req.BaseUrl + "/");
 
             if (req.RestUrlWithoutQuery == "/css")
-                return HttpServer.StringResponse(_css, "text/css; charset=utf-8");
+                return HttpResponse.Create(_css, "text/css; charset=utf-8");
 
             return Session.Enable<docGenSession>(req, session =>
             {
@@ -268,12 +268,12 @@ namespace RT.DocGen
                     return Authentication.LoginHandler(req, _usernamePasswordFile, u => session.Username = u, req.BaseUrl, "the documentation");
 
                 if (session.Username == null && _usernamePasswordFile != null)
-                    return HttpServer.RedirectResponse(req.BaseUrl + "/login?returnto=" + req.Url.UrlEscape());
+                    return HttpResponse.Redirect(req.BaseUrl + "/login?returnto=" + req.Url.UrlEscape());
 
                 if (req.RestUrlWithoutQuery == "/logout")
                 {
                     session.CloseAction = SessionCloseAction.Delete;
-                    return HttpServer.RedirectResponse(req.BaseUrl);
+                    return HttpResponse.Redirect(req.BaseUrl);
                 }
 
                 if (req.RestUrlWithoutQuery == "/changepassword")
@@ -395,12 +395,7 @@ namespace RT.DocGen
                     )
                 );
 
-                return new HttpResponse
-                {
-                    Status = status,
-                    Headers = new HttpResponseHeaders { ContentType = "text/html; charset=utf-8" },
-                    Content = new DynamicContentStream(html.ToEnumerable(), true)
-                };
+                return HttpResponse.Create(html, status);
             });
         }
 
@@ -536,8 +531,8 @@ namespace RT.DocGen
                 var hasGenericTypeParameters = t.Name.Contains('`');
 
                 string ret = hasGenericTypeParameters ? t.Name.Remove(t.Name.IndexOf('`')) : t.Name.TrimEnd('&');
-                if (baseUrl != null && !t.IsGenericParameter && _types.ContainsKey(GetTypeFullName(t)))
-                    yield return new A(ret) { href = baseUrl + "/" + GetTypeFullName(t).UrlEscape() };
+                if (baseUrl != null && !t.IsGenericParameter && _types.ContainsKey(getTypeFullName(t)))
+                    yield return new A(ret) { href = baseUrl + "/" + getTypeFullName(t).UrlEscape() };
                 else
                     yield return ret;
 
@@ -764,7 +759,7 @@ namespace RT.DocGen
             }
             else if (m.MemberType == MemberTypes.NestedType)
             {
-                sb.Append(GetTypeFullName((Type) m));
+                sb.Append(getTypeFullName((Type) m));
             }
             else
             {
@@ -921,7 +916,7 @@ namespace RT.DocGen
                     if (mkvp.Value.Member == selectedMember) css += " highlighted";
                     return mkvp.Value.Member.MemberType != MemberTypes.NestedType
                         ? new DIV { class_ = css }._(new SPAN(mkvp.Value.Member.MemberType.ToString()[0]) { class_ = "icon" }, new A(friendlyMemberName(mkvp.Value.Member, parameterTypes: true)) { href = req.BaseUrl + "/" + mkvp.Key.UrlEscape() })
-                        : generateTypeBullet(GetTypeFullName((Type) mkvp.Value.Member), selectedType, selectedMember, req);
+                        : generateTypeBullet(getTypeFullName((Type) mkvp.Value.Member), selectedType, selectedMember, req);
                 })
             );
         }
@@ -1119,7 +1114,7 @@ namespace RT.DocGen
 
             if (!isDelegate)
             {
-                foreach (var gr in _types[GetTypeFullName(type)].Members.Where(kvp => isPublic(kvp.Value.Member)).GroupBy(kvp => new
+                foreach (var gr in _types[getTypeFullName(type)].Members.Where(kvp => isPublic(kvp.Value.Member)).GroupBy(kvp => new
                 {
                     MemberType = kvp.Value.Member.MemberType,
                     IsStatic = isStatic(kvp.Value.Member)
