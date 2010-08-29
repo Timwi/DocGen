@@ -464,11 +464,11 @@ namespace RT.DocGen
             }
         }
 
-        private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces = false, bool includeOuterTypes = false, string baseUrl = null, bool inclRef = false, bool span = false)
+        private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces = false, bool includeOuterTypes = false, bool variance = false, string baseUrl = null, bool inclRef = false, bool span = false)
         {
             if (span)
             {
-                yield return new SPAN(friendlyTypeName(t, includeNamespaces, includeOuterTypes, baseUrl, inclRef, span: false))
+                yield return new SPAN(friendlyTypeName(t, includeNamespaces, includeOuterTypes, variance, baseUrl, inclRef, span: false))
                 {
                     class_ = "type",
                     title = Tag.ToString(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true), false)
@@ -485,14 +485,14 @@ namespace RT.DocGen
 
             if (t.IsArray)
             {
-                yield return friendlyTypeName(t.GetElementType(), includeNamespaces, includeOuterTypes, span: span);
+                yield return friendlyTypeName(t.GetElementType(), includeNamespaces, includeOuterTypes, variance, span: span);
                 yield return "[]";
                 yield break;
             }
 
             if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))
             {
-                yield return friendlyTypeName(t.GetGenericArguments()[0], includeNamespaces, includeOuterTypes, span: span);
+                yield return friendlyTypeName(t.GetGenericArguments()[0], includeNamespaces, includeOuterTypes, variance, span: span);
                 yield return "?";
                 yield break;
             }
@@ -516,9 +516,16 @@ namespace RT.DocGen
             else if (t == typeof(object)) yield return "object";
             else
             {
+                if (t.IsGenericParameter && variance)
+                {
+                    if (t.GenericParameterAttributes.HasFlag(GenericParameterAttributes.Contravariant))
+                        yield return "in ";
+                    else if (t.GenericParameterAttributes.HasFlag(GenericParameterAttributes.Covariant))
+                        yield return "out ";
+                }
                 if (includeOuterTypes && t.IsNested && !t.IsGenericParameter)
                 {
-                    yield return friendlyTypeName(t.DeclaringType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, span: span);
+                    yield return friendlyTypeName(t.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: span);
                     yield return ".";
                 }
                 else if (includeNamespaces && !t.IsGenericParameter)
@@ -546,21 +553,21 @@ namespace RT.DocGen
                     {
                         if (!first) yield return ", ";
                         first = false;
-                        yield return friendlyTypeName(ga, includeNamespaces, includeOuterTypes, baseUrl, inclRef, span);
+                        yield return friendlyTypeName(ga, includeNamespaces, includeOuterTypes, variance, baseUrl, inclRef, span);
                     }
                     yield return ">";
                 }
             }
         }
 
-        private object friendlyMemberName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool namespaces = false, bool indent = false, string url = null, string baseUrl = null, bool stringOnly = false)
+        private object friendlyMemberName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool namespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool stringOnly = false)
         {
             if (m.MemberType == MemberTypes.NestedType)
-                return friendlyTypeName((Type) m, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly);
+                return friendlyTypeName((Type) m, includeNamespaces: namespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: !stringOnly);
 
             if (m.MemberType == MemberTypes.Constructor || m.MemberType == MemberTypes.Method)
             {
-                var f = friendlyMethodName(m, returnType, containingType, parameterTypes, parameterNames, namespaces, indent, url, baseUrl, stringOnly: stringOnly);
+                var f = friendlyMethodName(m, returnType, containingType, parameterTypes, parameterNames, parameterDefaultValues, namespaces, variance, indent, url, baseUrl, stringOnly: stringOnly);
                 return stringOnly ? (object) f : new SPAN { class_ = m.MemberType.ToString(), title = Tag.ToString(friendlyMemberName(m, true, true, true, true, true, stringOnly: true), false) }._(f);
             }
 
@@ -577,7 +584,7 @@ namespace RT.DocGen
             return stringOnly ? (object) Tag.ToString(arr, false) : new SPAN(arr) { class_ = m.MemberType.ToString(), title = Tag.ToString(friendlyMemberName(m, true, true, true, true, true, stringOnly: true), false) };
         }
 
-        private IEnumerable<object> friendlyMethodName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool includeNamespaces = false, bool indent = false, string url = null, string baseUrl = null, bool isDelegate = false, bool stringOnly = false)
+        private IEnumerable<object> friendlyMethodName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool includeNamespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool isDelegate = false, bool stringOnly = false)
         {
             MethodBase mi = m as MethodBase;
             if (isDelegate)
@@ -595,7 +602,7 @@ namespace RT.DocGen
             if ((m.MemberType == MemberTypes.Constructor || isDelegate) && url != null)
                 yield return stringOnly ? (object) friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: false) : new STRONG(new A(friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: true)) { href = url });
             else if (isDelegate)
-                yield return stringOnly ? (object) friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: true) : new STRONG(friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, span: true));
+                yield return stringOnly ? (object) friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance) : new STRONG(friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: true));
             else if (containingType)
                 yield return friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly);
             else if (m.MemberType == MemberTypes.Constructor)
@@ -626,14 +633,43 @@ namespace RT.DocGen
                     var f = new object[] {
                         parameterTypes && p.IsOut ? "out " : null,
                         parameterTypes && p.IsDefined<ParamArrayAttribute>() ? "params " : null,
-                        parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef:!p.IsOut, span:!stringOnly) : null,
+                        parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: !p.IsOut, span: !stringOnly) : null,
                         parameterTypes && parameterNames ? " " : null,
-                        parameterNames ? (stringOnly ? (object) p.Name : new STRONG(p.Name)) : null
+                        parameterNames ? (stringOnly ? (object) p.Name : new STRONG(p.Name)) : null,
+                        parameterDefaultValues && p.Attributes.HasFlag(ParameterAttributes.HasDefault) ? friendlyDefaultValue(p.DefaultValue, baseUrl) : null
                    };
                     yield return stringOnly ? (object) Tag.ToString(f, false) : new SPAN { class_ = "parameter" }._(f);
                 }
                 yield return indent && mi.GetParameters().Any() ? "\n)" : ")";
             }
+        }
+
+        private IEnumerable<object> friendlyDefaultValue(object val, string baseUrl)
+        {
+            yield return " = ";
+            if (val == null)
+            {
+                yield return "null";
+                yield break;
+            }
+            var t = val.GetType();
+            if (t.IsEnum && _types.ContainsKey(getTypeFullName(t)))
+            {
+                var info = _types[getTypeFullName(t)];
+                foreach (var f in t.GetFields(BindingFlags.Static | BindingFlags.Public))
+                    if (f.GetValue(null).Equals(val) && info.Members.ContainsKey(documentationCompatibleMemberName(f)))
+                    {
+                        yield return friendlyMemberName(f, containingType: true, url: baseUrl + "/" + documentationCompatibleMemberName(f).UrlEscape(), baseUrl: baseUrl);
+                        yield break;
+                    }
+                yield return "0x" + Convert.ToInt64(val).ToString("x");
+            }
+            else if (t == typeof(string))
+                yield return "\"" + val.ToString().CLiteralEscape() + "\"";
+            else if (t == typeof(bool))
+                yield return val.ToString().ToLower();
+            else
+                yield return val.ToString();
         }
 
         private object cSharpCompatibleMethodName(string methodName, object returnType)
@@ -962,7 +998,7 @@ namespace RT.DocGen
             );
             yield return new UL(new LI("Declared in: ", friendlyTypeName(member.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true)));
             yield return new H2("Declaration");
-            yield return new PRE((isStatic ? "static " : null), friendlyMemberName(member, returnType: true, parameterTypes: true, parameterNames: true, indent: true, baseUrl: req.BaseUrl));
+            yield return new PRE((isStatic ? "static " : null), friendlyMemberName(member, returnType: true, parameterTypes: true, parameterNames: true, parameterDefaultValues: true, variance: true, indent: true, baseUrl: req.BaseUrl));
 
             if (document != null)
             {
@@ -1038,7 +1074,7 @@ namespace RT.DocGen
                 type.IsNested
                     ? (isDelegate ? "Nested delegate: " : type.IsEnum ? "Nested enum: " : type.IsValueType ? "Nested struct: " : type.IsInterface ? "Nested interface: " : (type.IsAbstract && type.IsSealed) ? "Nested static class: " : type.IsAbstract ? "Nested abstract class: " : "Nested class: ")
                     : (isDelegate ? "Delegate: " : type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : type.IsInterface ? "Interface: " : (type.IsAbstract && type.IsSealed) ? "Static class: " : type.IsAbstract ? "Abstract class: " : "Class: "),
-                friendlyTypeName(type, includeNamespaces: true, includeOuterTypes: true, span: true)
+                friendlyTypeName(type, includeNamespaces: true, includeOuterTypes: true, variance: true, span: true)
             );
 
             yield return new UL { class_ = "typeinfo" }._(
@@ -1054,7 +1090,7 @@ namespace RT.DocGen
             {
                 m = type.GetMethod("Invoke");
                 yield return new H2("Declaration");
-                yield return new PRE(friendlyMethodName(m, returnType: true, parameterTypes: true, parameterNames: true, includeNamespaces: true, indent: true, baseUrl: req.BaseUrl, isDelegate: true));
+                yield return new PRE(friendlyMethodName(m, returnType: true, parameterTypes: true, parameterNames: true, includeNamespaces: true, variance: true, indent: true, baseUrl: req.BaseUrl, isDelegate: true));
             }
 
             if (document == null)
@@ -1224,8 +1260,13 @@ namespace RT.DocGen
                         new TD(
                             docElem == null ? (object) new EM("This type parameter is not documented.") : interpretNodes(docElem.Nodes(), req),
                             constraints == null || constraints.Length == 0 ? null :
-                            constraints.Length > 0 ? new object[] { new BR(), new EM("Must be derived from:"), ' ', friendlyTypeName(constraints[0], includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true),
-                                constraints.Skip(1).Select(c => new object[] { ", ", friendlyTypeName(constraints[0], includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true) }) } : null
+                            constraints.Length > 0 ? new object[] { new BR(), new EM("Must be derived from:"), " ",
+                                constraints.SelectMany(c => new object[] { ", ", friendlyTypeName(c, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true) }).Skip(1) } : null,
+                            gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.DefaultConstructorConstraint) ? new object[] { new BR(), new EM("Must have a default constructor.") } : null,
+                            gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint) ? new object[] { new BR(), new EM("Must be a non-nullable value type.") } : null,
+                            gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint) ? new object[] { new BR(), new EM("Must be a reference type.") } : null,
+                            gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.Covariant) ? new object[] { new BR(), new EM("Covariant.") } : null,
+                            gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.Contravariant) ? new object[] { new BR(), new EM("Contravariant.") } : null
                         )
                     );
                 })
