@@ -441,7 +441,7 @@ namespace RT.DocGen
 
             yield return new DIV(
                 new STRONG("Index: "),
-                memberTypes.SelectMany(mt => new object[] { " | ", new A(humanReadable(mt)) { href = "#" + mt.ToString() } }).Skip(1)
+                memberTypes.Select(mt => new A(humanReadable(mt)) { href = "#" + mt.ToString() }).InsertBetween<object>(" | ")
             );
 
             foreach (var group in eligibleMembers.Select(k => new
@@ -1261,7 +1261,7 @@ namespace RT.DocGen
                             docElem == null ? (object) new EM("This type parameter is not documented.") : interpretNodes(docElem.Nodes(), req),
                             constraints == null || constraints.Length == 0 ? null :
                             constraints.Length > 0 ? new object[] { new BR(), new EM("Must be derived from:"), " ",
-                                constraints.SelectMany(c => new object[] { ", ", friendlyTypeName(c, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true) }).Skip(1) } : null,
+                                constraints.Select(c => friendlyTypeName(c, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true)).InsertBetween<object>(", ") } : null,
                             gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.DefaultConstructorConstraint) ? new object[] { new BR(), new EM("Must have a default constructor.") } : null,
                             gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint) ? new object[] { new BR(), new EM("Must be a non-nullable value type.") } : null,
                             gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint) ? new object[] { new BR(), new EM("Must be a reference type.") } : null,
@@ -1362,28 +1362,44 @@ namespace RT.DocGen
 
             // Step 1: Turn all the text nodes into strings, split them at the newlines, then add the newlines back in; turn all the non-text nodes into HTML
             // Example is now: { "", E.N, "    XYZ", [code element], E.N, E.N, "    ABC" }       (E.N stands for Environment.NewLine)
-            var everything = elem.Nodes().SelectMany(nod => nod is XText ? Regex.Split(((XText) nod).Value, @"\r\n|\r|\n").SelectMany(lin => new string[] { Environment.NewLine, lin.TrimEnd() }).Skip(1).Cast<object>() : interpretNode((XElement) nod, req));
+            var everything = elem.Nodes().SelectMany(nod => nod is XText ? Regex.Split(((XText) nod).Value, @"\r\n|\r|\n").Select(lin => lin.TrimEnd()).InsertBetween<object>(Environment.NewLine) : interpretNode((XElement) nod, req));
 
             // Step 2: Split the collection at the newlines, giving a set of lines which contain strings and HTML elements
             // Example is now: { { "" }, { "    XYZ", [code element] }, { }, { "    ABC" } }
             var lines = everything.Split(el => el is string && el.Equals(Environment.NewLine));
 
-            // Step 3: Determine the common indentation of the lines beginning with strings. Ignore empty lines as well as lines with just an empty string, but don't ignore lines beginning with a non-string object
+            // Step 3: Determine the common indentation of the lines beginning with strings.
             // Example gives commonIndentation = 4
-            var commonIndentation = lines.Min(lin => lin.Any() ? lin.First() is string ? string.IsNullOrEmpty((string) lin.First()) ? (int?) null : ((string) lin.First()).TakeWhile(c => c == ' ').Count() : 0 : null);
+            var commonIndentation = lines.Min(lin =>
+            {
+                // Empty lines don’t count
+                if (!lin.Any())
+                    return null;
 
-            // If the common indentation is 0 or the entire collection is empty strings (null), put the newlines back in and return it as it is
-            if (commonIndentation == null || commonIndentation.Value == 0)
-                return lines.SelectMany(lin => ((object) Environment.NewLine).Concat(lin)).Skip(1);
+                // If the first item is not a string, the indentation is zero.
+                var first = lin.First() as string;
+                if (first == null)
+                    return 0;
 
-            // Otherwise, we know that every line must start with a string (otherwise the common indentation would have been 0).
-            // Put the newlines back in, and remove the common indentation from all the strings that are the first element of each line.
+                // If the first item is an empty string, assume it’s the only item, so it’s a blank line
+                if (first == "")
+                    return null;
+
+                return first.TakeWhile(c => c == ' ').Count();
+            });
+
+            // If the common indentation exists and is greater than 0, we know that every line must start with a string.
+            // So remove the common indentation from all the strings that are the first element of each line.
             // Note that the use of SubstringSafe() elegantly handles the case of lines containing just an empty string.
-            // Result in the example is now: { "", E.N, "XYZ", [code element], E.N, E.N, "ABC" }
-            // (We are assuming here that you never get consecutive text nodes which might together produce a larger common indentation. With current Visual Studio XML documentation generation and the .NET XML API, that doesn't appear to occur.)
-            // The call to Trim() at the end removes empty strings at beginning and end.
-            // Result in the example is thus: { E.N, "XYZ", [code element], "\r\n", "\r\n", "ABC" }
-            return lines.SelectMany(lin => ((object) Environment.NewLine).Concat(((object) ((string) lin.First()).SubstringSafe(commonIndentation.Value)).Concat(lin.Skip(1)))).Skip(1).Trim();
+            // Result in the example is now: { { "" }, { "XYZ", [code element] }, { }, { "ABC" } }
+            // (We are assuming here that you never get consecutive text nodes which might together produce a larger common indentation.
+            // With current Visual Studio XML documentation generation and the .NET XML API, that doesn't appear to occur.)
+            if (commonIndentation != null && commonIndentation.Value > 0)
+                lines = lines.Select(lin => lin.Select((item, index) => index == 0 ? ((string) item).SubstringSafe(commonIndentation.Value) : item));
+
+            // Finally, put the newlines back in and return the result.
+            // Result in the example is thus: { { "" }, E.N, { "XYZ", [code element], }, E.N, { }, E.N, { "ABC" } }
+            return lines.InsertBetween<object>(Environment.NewLine);
         }
     }
 }
