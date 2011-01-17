@@ -1,3 +1,4 @@
+<!-- Custom Main.BuildScriptKind.ZYXWVUTSRQPONMLKJIHGFEDCBA -->
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"
          DefaultTargets="Build" ToolsVersion="4.0">
   <Import Project="..\common\Build\CommonImports.proj"/>
@@ -30,7 +31,7 @@
   </Target>
 
 
-  <!-- Deploy the DocGen service (release build) -->
+  <!-- Deploy the DocGen service -->
   <Target Name="Deploy" DependsOnTargets="BuildRelease">
     <Error Condition="'$(DeployPath)'==''" Text="DeployPath must be specified"/>
     <MakeDir Directories="$(DeployPath)"/>       <!-- a bit of hard-coding below to make this script a lot simpler... -->
@@ -41,7 +42,7 @@
   </Target>
 
 
-  <!-- Deploy the DocGen documentation to DocGen (debug build) -->
+  <!-- Deploy the DocGen documentation to DocGen (debug build to get documentation for debug-only things) -->
   <Target Name="DeployToDocGen" DependsOnTargets="BuildDebug">
     <Error Condition="'$(DeployToDocGenPath)'==''" Text="DeployToDocGenPath must be specified"/>
     <MakeDir Directories="$(DeployToDocGenPath)"/>       <!-- a bit of hard-coding below to make this script a lot simpler... -->
