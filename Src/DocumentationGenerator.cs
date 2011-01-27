@@ -1125,6 +1125,12 @@ namespace RT.DocGen
                             );
                         })
                     );
+                    var returns = document.Element("returns");
+                    if (returns != null)
+                    {
+                        yield return new H2("Returns");
+                        yield return interpretNodes(returns.Nodes(), req);
+                    }
                 }
 
                 if (type.IsGenericType)
