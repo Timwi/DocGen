@@ -9,9 +9,8 @@ using System.Xml.Linq;
 using RT.Servers;
 using RT.TagSoup;
 using RT.TagSoup.HtmlTags;
-using RT.Util.Collections;
+using RT.Util;
 using RT.Util.ExtensionMethods;
-using RT.Util.Streams;
 
 namespace RT.DocGen
 {
@@ -560,14 +559,14 @@ namespace RT.DocGen
             }
         }
 
-        private object friendlyMemberName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool namespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool stringOnly = false)
+        private object friendlyMemberName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool namespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool stringOnly = false)
         {
             if (m.MemberType == MemberTypes.NestedType)
                 return friendlyTypeName((Type) m, includeNamespaces: namespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: !stringOnly);
 
             if (m.MemberType == MemberTypes.Constructor || m.MemberType == MemberTypes.Method)
             {
-                var f = friendlyMethodName(m, returnType, containingType, parameterTypes, parameterNames, parameterDefaultValues, namespaces, variance, indent, url, baseUrl, stringOnly: stringOnly);
+                var f = friendlyMethodName(m, returnType, containingType, parameterTypes, parameterNames, parameterDefaultValues, omitGenericTypeParameters, namespaces, variance, indent, url, baseUrl, stringOnly: stringOnly);
                 return stringOnly ? (object) f : new SPAN { class_ = m.MemberType.ToString(), title = Tag.ToString(friendlyMemberName(m, true, true, true, true, true, stringOnly: true), false) }._(f);
             }
 
@@ -584,7 +583,7 @@ namespace RT.DocGen
             return stringOnly ? (object) Tag.ToString(arr, false) : new SPAN(arr) { class_ = m.MemberType.ToString(), title = Tag.ToString(friendlyMemberName(m, true, true, true, true, true, stringOnly: true), false) };
         }
 
-        private IEnumerable<object> friendlyMethodName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool includeNamespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool isDelegate = false, bool stringOnly = false)
+        private IEnumerable<object> friendlyMethodName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool includeNamespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool isDelegate = false, bool stringOnly = false)
         {
             MethodBase mi = m as MethodBase;
             if (isDelegate)
@@ -619,7 +618,7 @@ namespace RT.DocGen
             if (mi.IsGenericMethod)
             {
                 if (!stringOnly && !indent) yield return new WBR();
-                yield return "<" + mi.GetGenericArguments().Select(ga => ga.Name).JoinString(", ") + ">";
+                yield return omitGenericTypeParameters ? "<>" : "<" + mi.GetGenericArguments().Select(ga => ga.Name).JoinString(", ") + ">";
             }
             if (parameterTypes || parameterNames)
             {
@@ -630,14 +629,14 @@ namespace RT.DocGen
                 {
                     if (!first) yield return indent ? ",\n    " : ", ";
                     first = false;
-                    var f = new object[] {
+                    var f = Ut.NewArray<object>(
                         parameterTypes && p.IsOut ? "out " : null,
                         parameterTypes && p.IsDefined<ParamArrayAttribute>() ? "params " : null,
                         parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: !p.IsOut, span: !stringOnly) : null,
                         parameterTypes && parameterNames ? " " : null,
-                        parameterNames ? (stringOnly ? (object) p.Name : new STRONG(p.Name)) : null,
+                        parameterNames ? (stringOnly || !parameterTypes ? (object) p.Name : new STRONG(p.Name)) : null,
                         parameterDefaultValues && p.Attributes.HasFlag(ParameterAttributes.HasDefault) ? friendlyDefaultValue(p.DefaultValue, baseUrl) : null
-                   };
+                   );
                     yield return stringOnly ? (object) Tag.ToString(f, false) : new SPAN { class_ = "parameter" }._(f);
                 }
                 yield return indent && mi.GetParameters().Any() ? "\n)" : ")";
@@ -951,7 +950,7 @@ namespace RT.DocGen
                     if (mkvp.Value.Documentation == null) css += " missing";
                     if (mkvp.Value.Member == selectedMember) css += " highlighted";
                     return mkvp.Value.Member.MemberType != MemberTypes.NestedType
-                        ? new DIV { class_ = css }._(new SPAN(mkvp.Value.Member.MemberType.ToString()[0]) { class_ = "icon" }, new A(friendlyMemberName(mkvp.Value.Member, parameterTypes: true)) { href = req.BaseUrl + "/" + mkvp.Key.UrlEscape() })
+                        ? new DIV { class_ = css }._(new SPAN(mkvp.Value.Member.MemberType.ToString()[0]) { class_ = "icon" }, new A(friendlyMemberName(mkvp.Value.Member, parameterNames: true, omitGenericTypeParameters: true)) { href = req.BaseUrl + "/" + mkvp.Key.UrlEscape() })
                         : generateTypeBullet(getTypeFullName((Type) mkvp.Value.Member), selectedType, selectedMember, req);
                 })
             );
