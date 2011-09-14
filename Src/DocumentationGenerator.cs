@@ -15,7 +15,7 @@ using RT.Util.ExtensionMethods;
 namespace RT.DocGen
 {
     /// <summary>
-    /// Provides an <see cref="HttpRequestHandler"/> that generates web pages from C# XML documentation.
+    /// Provides an HTTP request handler that generates web pages from C# XML documentation.
     /// </summary>
     public class DocumentationGenerator
     {
@@ -247,12 +247,9 @@ namespace RT.DocGen
             return "T:" + (t.IsGenericType ? t.GetGenericTypeDefinition() : t).FullName.TrimEnd('&').Replace("+", ".");
         }
 
-        /// <summary>
-        /// Returns the <see cref="HttpRequestHandler"/> that handles HTTP requests for the documentation.
+        /// <summary>Provides the HTTP request handler for the documentation.
         /// Instantiate a <see cref="HttpRequestHandlerHook"/> with this and add it to an instance of
-        /// <see cref="HttpServer"/> using <see cref="HttpServer.RequestHandlerHooks"/>.
-        /// </summary>
-        /// <returns>An <see cref="HttpRequestHandler"/> that can be hooked to an instance of <see cref="HttpServer"/></returns>
+        /// <see cref="HttpServer"/> using <see cref="HttpServer.RequestHandlerHooks"/>.</summary>
         public HttpResponse Handler(HttpRequest req)
         {
             if (req.RestUrlWithoutQuery == "")
