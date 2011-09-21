@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,7 +8,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using RT.Servers;
-using RT.TagSoup;
 using RT.TagSoup.HtmlTags;
 using RT.Util;
 using RT.Util.ExtensionMethods;
@@ -305,7 +305,7 @@ namespace RT.DocGen
                     type = _types[token].Type;
                     ns = type.Namespace;
                     title = type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : type.IsInterface ? "Interface: " : typeof(Delegate).IsAssignableFrom(type) ? "Delegate: " : "Class: ";
-                    title += Tag.ToString(friendlyTypeName(type, includeOuterTypes: true), false);
+                    title += stringSoup(friendlyTypeName(type, includeOuterTypes: true));
                     content = generateTypeDocumentation(_types[token].Type, _types[token].Documentation, req);
                 }
                 else if (_members.ContainsKey(token))
@@ -322,7 +322,7 @@ namespace RT.DocGen
                                 member.MemberType == MemberTypes.Method ? "Method: " :
                                 member.MemberType == MemberTypes.Property && isstatic ? "Static property: " :
                                 member.MemberType == MemberTypes.Property ? "Property: " : "Member: ";
-                    title += member.MemberType == MemberTypes.Constructor ? Tag.ToString(friendlyTypeName(type, includeOuterTypes: true), false) : member.Name;
+                    title += member.MemberType == MemberTypes.Constructor ? stringSoup(friendlyTypeName(type, includeOuterTypes: true)) : member.Name;
                     content = generateMemberDocumentation(_members[token].Member, _members[token].Documentation, req);
                 }
                 else if (req.RestUrlWithoutQuery == "/")
@@ -401,7 +401,7 @@ namespace RT.DocGen
             foreach (var item in _types.Select(k => new
             {
                 Type = k.Value.Type,
-                SortKey = Tag.ToString(friendlyTypeName(k.Value.Type, span: false), false),
+                SortKey = stringSoup(friendlyTypeName(k.Value.Type, span: false)),
                 FullName = k.Key
             }).OrderBy(n => n.SortKey))
             {
@@ -443,7 +443,7 @@ namespace RT.DocGen
             foreach (var group in eligibleMembers.Select(k => new
             {
                 Member = k.Value.Member,
-                SortKey = Tag.ToString(friendlyMemberName(k.Value.Member, parameterTypes: true, stringOnly: true), false),
+                SortKey = stringSoup(friendlyMemberName(k.Value.Member, parameterTypes: true, stringOnly: true)),
                 FullName = k.Key
             }).GroupBy(n => n.Member.MemberType).OrderBy(gr => sortKey(gr.Key)))
             {
@@ -467,7 +467,7 @@ namespace RT.DocGen
                 yield return new SPAN(friendlyTypeName(t, includeNamespaces, includeOuterTypes, variance, baseUrl, inclRef, span: false))
                 {
                     class_ = "type",
-                    title = Tag.ToString(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true), false)
+                    title = stringSoup(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true))
                 };
                 yield break;
             }
@@ -564,7 +564,7 @@ namespace RT.DocGen
             if (m.MemberType == MemberTypes.Constructor || m.MemberType == MemberTypes.Method)
             {
                 var f = friendlyMethodName(m, returnType, containingType, parameterTypes, parameterNames, parameterDefaultValues, omitGenericTypeParameters, namespaces, variance, indent, url, baseUrl, stringOnly: stringOnly);
-                return stringOnly ? (object) f : new SPAN { class_ = m.MemberType.ToString(), title = Tag.ToString(friendlyMemberName(m, true, true, true, true, true, stringOnly: true), false) }._(f);
+                return stringOnly ? (object) f : new SPAN { class_ = m.MemberType.ToString(), title = stringSoup(friendlyMemberName(m, true, true, true, true, true, stringOnly: true)) }._(f);
             }
 
             var arr = new object[] {
@@ -577,7 +577,7 @@ namespace RT.DocGen
                     ? (object) friendlyPropertyName((PropertyInfo) m, parameterTypes, parameterNames, namespaces, indent, url, baseUrl, stringOnly)
                     : stringOnly ? (object) m.Name : new STRONG(url == null ? (object) m.Name : new A(m.Name) { href = url })
             };
-            return stringOnly ? (object) Tag.ToString(arr, false) : new SPAN(arr) { class_ = m.MemberType.ToString(), title = Tag.ToString(friendlyMemberName(m, true, true, true, true, true, stringOnly: true), false) };
+            return stringOnly ? (object) stringSoup(arr) : new SPAN(arr) { class_ = m.MemberType.ToString(), title = stringSoup(friendlyMemberName(m, true, true, true, true, true, stringOnly: true)) };
         }
 
         private IEnumerable<object> friendlyMethodName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool includeNamespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool isDelegate = false, bool stringOnly = false)
@@ -633,8 +633,8 @@ namespace RT.DocGen
                         parameterTypes && parameterNames ? " " : null,
                         parameterNames ? (stringOnly || !parameterTypes ? (object) p.Name : new STRONG(p.Name)) : null,
                         parameterDefaultValues && p.Attributes.HasFlag(ParameterAttributes.HasDefault) ? friendlyDefaultValue(p.DefaultValue, baseUrl) : null
-                   );
-                    yield return stringOnly ? (object) Tag.ToString(f, false) : new SPAN { class_ = "parameter" }._(f);
+                    );
+                    yield return stringOnly ? (object) stringSoup(f) : new SPAN { class_ = "parameter" }._(f);
                 }
                 yield return indent && mi.GetParameters().Any() ? "\n)" : ")";
             }
@@ -1402,6 +1402,26 @@ namespace RT.DocGen
             // Finally, put the newlines back in and return the result.
             // Result in the example is thus: { { "" }, E.N, { "XYZ", [code element], }, E.N, { }, E.N, { "ABC" } }
             return lines.InsertBetween<object>(Environment.NewLine);
+        }
+
+        private string stringSoup(object obj)
+        {
+            var sb = new StringBuilder();
+            stringSoup(obj, sb);
+            return sb.ToString();
+        }
+
+        private void stringSoup(object obj, StringBuilder sb)
+        {
+            if (obj == null)
+                return;
+            if (obj is string)
+                sb.Append((string) obj);
+            else if (obj is IEnumerable)
+                foreach (var elem in (IEnumerable) obj)
+                    stringSoup(elem, sb);
+            else
+                throw new InvalidOperationException(@"Encountered {0} where only strings are expected.".Fmt(obj.GetType().FullName));
         }
     }
 }
