@@ -632,7 +632,7 @@ namespace RT.DocGen
                         parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: !p.IsOut, span: !stringOnly) : null,
                         parameterTypes && parameterNames ? " " : null,
                         parameterNames ? (stringOnly || !parameterTypes ? (object) p.Name : new STRONG(p.Name)) : null,
-                        parameterDefaultValues && p.Attributes.HasFlag(ParameterAttributes.HasDefault) ? friendlyDefaultValue(p.DefaultValue, baseUrl) : null
+                        parameterDefaultValues && p.Attributes.HasFlag(ParameterAttributes.HasDefault) ? friendlyDefaultValue(p.DefaultValue, baseUrl, stringOnly) : null
                     );
                     yield return stringOnly ? (object) stringSoup(f) : new SPAN { class_ = "parameter" }._(f);
                 }
@@ -640,7 +640,7 @@ namespace RT.DocGen
             }
         }
 
-        private IEnumerable<object> friendlyDefaultValue(object val, string baseUrl)
+        private IEnumerable<object> friendlyDefaultValue(object val, string baseUrl, bool stringOnly = false)
         {
             yield return " = ";
             if (val == null)
@@ -655,7 +655,7 @@ namespace RT.DocGen
                 foreach (var f in t.GetFields(BindingFlags.Static | BindingFlags.Public))
                     if (f.GetValue(null).Equals(val) && info.Members.ContainsKey(documentationCompatibleMemberName(f)))
                     {
-                        yield return friendlyMemberName(f, containingType: true, url: baseUrl + "/" + documentationCompatibleMemberName(f).UrlEscape(), baseUrl: baseUrl);
+                        yield return friendlyMemberName(f, containingType: true, url: baseUrl == null ? null : baseUrl + "/" + documentationCompatibleMemberName(f).UrlEscape(), baseUrl: baseUrl, stringOnly: stringOnly);
                         yield break;
                     }
                 yield return "0x" + Convert.ToInt64(val).ToString("x");
@@ -1363,14 +1363,17 @@ namespace RT.DocGen
             // Example: suppose the input is "<code>\n    XYZ<see/>\n\n    ABC</code>". Note <see/> is an inline element.
 
             // Step 1: Turn all the text nodes into strings, split them at the newlines, then add the newlines back in; turn all the non-text nodes into HTML
-            // Example is now: { "", E.N, "    XYZ", [code element], E.N, E.N, "    ABC" }       (E.N stands for Environment.NewLine)
+            // Example is now: { "", E.N, "    XYZ", [<see> element], E.N, E.N, "    ABC" }       (E.N stands for Environment.NewLine)
             var everything = elem.Nodes().SelectMany(nod => nod is XText ? Regex.Split(((XText) nod).Value, @"\r\n|\r|\n").Select(lin => lin.TrimEnd()).InsertBetween<object>(Environment.NewLine) : interpretNode((XElement) nod, req));
 
             // Step 2: Split the collection at the newlines, giving a set of lines which contain strings and HTML elements
-            // Example is now: { { "" }, { "    XYZ", [code element] }, { }, { "    ABC" } }
-            var lines = everything.Split(el => el is string && el.Equals(Environment.NewLine));
+            // Example is now: { { "" }, { "    XYZ", [<see> element] }, { }, { "    ABC" } }
+            // Put this into a list to avoid enumerating this entire computation twice.
+            IEnumerable<IEnumerable<object>> lines = everything.Split(el => el is string && el.Equals(Environment.NewLine)).ToList();
 
             // Step 3: Determine the common indentation of the lines beginning with strings.
+            // (We are assuming here that you never get consecutive text nodes which might together produce a larger common indentation.
+            // With current Visual Studio XML documentation generation and the .NET XML API, that doesn’t appear to occur.)
             // Example gives commonIndentation = 4
             var commonIndentation = lines.Min(lin =>
             {
@@ -1393,14 +1396,12 @@ namespace RT.DocGen
             // If the common indentation exists and is greater than 0, we know that every line must start with a string.
             // So remove the common indentation from all the strings that are the first element of each line.
             // Note that the use of SubstringSafe() elegantly handles the case of lines containing just an empty string.
-            // Result in the example is now: { { "" }, { "XYZ", [code element] }, { }, { "ABC" } }
-            // (We are assuming here that you never get consecutive text nodes which might together produce a larger common indentation.
-            // With current Visual Studio XML documentation generation and the .NET XML API, that doesn't appear to occur.)
+            // Result in the example is now: { { "" }, { "XYZ", [<see> element] }, { }, { "ABC" } }
             if (commonIndentation != null && commonIndentation.Value > 0)
                 lines = lines.Select(lin => lin.Select((item, index) => index == 0 ? ((string) item).SubstringSafe(commonIndentation.Value) : item));
 
             // Finally, put the newlines back in and return the result.
-            // Result in the example is thus: { { "" }, E.N, { "XYZ", [code element], }, E.N, { }, E.N, { "ABC" } }
+            // Result in the example is thus: { { "" }, E.N, { "XYZ", [<see> element] }, E.N, { }, E.N, { "ABC" } }
             return lines.InsertBetween<object>(Environment.NewLine);
         }
 
