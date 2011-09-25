@@ -362,7 +362,7 @@ namespace RT.DocGen
                                     ),
                                     new DIV { class_ = "legend" }._(
                                         new P("Legend"),
-                                        new TABLE { width = "100%" }._(
+                                        new TABLE { style = "width:100%" }._(
                                             new TR(
                                                 new TD(
                                                     new DIV(new SPAN("Cl") { class_ = "typeicon" }, "Class") { class_ = "Class type" },
