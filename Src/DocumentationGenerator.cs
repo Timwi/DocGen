@@ -391,7 +391,7 @@ namespace RT.DocGen
                     )
                 );
 
-                return HttpResponse.Create(html, status);
+                return HttpResponse.Html(html, status);
             });
         }
 
