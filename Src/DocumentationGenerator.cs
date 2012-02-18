@@ -247,9 +247,7 @@ namespace RT.DocGen
             return "T:" + (t.IsGenericType ? t.GetGenericTypeDefinition() : t).FullName.TrimEnd('&').Replace("+", ".");
         }
 
-        /// <summary>Provides the HTTP request handler for the documentation.
-        /// Instantiate a <see cref="HttpRequestHandlerHook"/> with this and add it to an instance of
-        /// <see cref="HttpServer"/> using <see cref="HttpServer.RequestHandlerHooks"/>.</summary>
+        /// <summary>Provides the HTTP request handler for the documentation.</summary>
         public HttpResponse Handler(HttpRequest req)
         {
             if (req.RestUrlWithoutQuery == "")
