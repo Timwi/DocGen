@@ -248,7 +248,7 @@ namespace RT.DocGen
         }
 
         /// <summary>Provides the HTTP request handler for the documentation.</summary>
-        public HttpResponse Handler(HttpRequest req)
+        public HttpResponse Handler(UrlPathRequest req)
         {
             if (req.RestUrlWithoutQuery == "")
                 return HttpResponse.Redirect(req.BaseUrl + "/");
@@ -393,7 +393,7 @@ namespace RT.DocGen
             });
         }
 
-        private IEnumerable<object> generateAllTypes(HttpRequest req)
+        private IEnumerable<object> generateAllTypes(UrlPathRequest req)
         {
             var first = true;
             foreach (var item in _types.Select(k => new
@@ -410,7 +410,7 @@ namespace RT.DocGen
             }
         }
 
-        private IEnumerable<object> generateAllMembers(HttpRequest req)
+        private IEnumerable<object> generateAllMembers(UrlPathRequest req)
         {
             var eligibleMembers = _members.Where(k => k.Value.Member.MemberType != MemberTypes.NestedType);
 
@@ -931,7 +931,7 @@ namespace RT.DocGen
             return getMethod == null ? property.GetSetMethod().IsStatic : getMethod.IsStatic;
         }
 
-        private object generateTypeBullet(string typeFullName, Type selectedType, MemberInfo selectedMember, HttpRequest req)
+        private object generateTypeBullet(string typeFullName, Type selectedType, MemberInfo selectedMember, UrlPathRequest req)
         {
             var typeinfo = _types[typeFullName];
             string cssClass = typeinfo.GetTypeCssClass() + " type";
@@ -958,7 +958,7 @@ namespace RT.DocGen
             return isNestedTypeOf(nestedType.DeclaringType, containingType);
         }
 
-        private IEnumerable<object> generateNamespaceDocumentation(string namespaceName, HttpRequest req)
+        private IEnumerable<object> generateNamespaceDocumentation(string namespaceName, UrlPathRequest req)
         {
             yield return new H1("Namespace: ", namespaceName);
             yield return new TABLE { class_ = "doclist" }._(
@@ -975,7 +975,7 @@ namespace RT.DocGen
             );
         }
 
-        private IEnumerable<object> generateMemberDocumentation(MemberInfo member, XElement document, HttpRequest req)
+        private IEnumerable<object> generateMemberDocumentation(MemberInfo member, XElement document, UrlPathRequest req)
         {
             bool isStatic =
                 member.MemberType == MemberTypes.Field && (member as FieldInfo).IsStatic ||
@@ -1060,7 +1060,7 @@ namespace RT.DocGen
                 yield return generateGenericTypeParameterTable(((MethodBase) member).GetGenericArguments(), document, req);
         }
 
-        private IEnumerable<object> generateTypeDocumentation(Type type, XElement document, HttpRequest req)
+        private IEnumerable<object> generateTypeDocumentation(Type type, XElement document, UrlPathRequest req)
         {
             bool isDelegate = typeof(Delegate).IsAssignableFrom(type);
 
@@ -1178,7 +1178,7 @@ namespace RT.DocGen
             }
         }
 
-        private LI inheritsFrom(Type type, HttpRequest req)
+        private LI inheritsFrom(Type type, UrlPathRequest req)
         {
             if ((type.IsAbstract && type.IsSealed) || type.IsInterface)
                 return null;
@@ -1191,14 +1191,14 @@ namespace RT.DocGen
                 ));
         }
 
-        private object inheritsFromBullet(Type type, HttpRequest req)
+        private object inheritsFromBullet(Type type, UrlPathRequest req)
         {
             if (type == null)
                 return null;
             return new UL(new LI(friendlyTypeName(type, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true), type.IsSealed ? " (sealed)" : null, inheritsFromBullet(type.BaseType, req)));
         }
 
-        private LI implementsInterfaces(Type type, HttpRequest req)
+        private LI implementsInterfaces(Type type, UrlPathRequest req)
         {
             var infs = type.GetInterfaces();
             if (!infs.Any())
@@ -1215,7 +1215,7 @@ namespace RT.DocGen
             );
         }
 
-        private LI implementedBy(Type type, HttpRequest req)
+        private LI implementedBy(Type type, UrlPathRequest req)
         {
             var implementedBy = _types.Select(kvp => kvp.Value.Type).Where(t => t.GetInterfaces().Any(i => i.Equals(type) || (i.IsGenericType && i.GetGenericTypeDefinition().Equals(type)))).ToArray();
             if (!implementedBy.Any())
@@ -1228,7 +1228,7 @@ namespace RT.DocGen
             );
         }
 
-        private LI derivedTypes(Type type, HttpRequest req)
+        private LI derivedTypes(Type type, UrlPathRequest req)
         {
             var derivedTypes = _types.Select(kvp => kvp.Value.Type)
                 .Where(t => t.BaseType == type || (t.BaseType != null && t.BaseType.IsGenericType && t.BaseType.GetGenericTypeDefinition() == type))
@@ -1244,7 +1244,7 @@ namespace RT.DocGen
             );
         }
 
-        private IEnumerable<object> generateGenericTypeParameterTable(Type[] genericTypeArguments, XElement document, HttpRequest req)
+        private IEnumerable<object> generateGenericTypeParameterTable(Type[] genericTypeArguments, XElement document, UrlPathRequest req)
         {
             if (!genericTypeArguments.Any())
                 yield break;
@@ -1273,12 +1273,12 @@ namespace RT.DocGen
             );
         }
 
-        private object interpretNodes(IEnumerable<XNode> nodes, HttpRequest req)
+        private object interpretNodes(IEnumerable<XNode> nodes, UrlPathRequest req)
         {
             return nodes.Select(n => interpretNode(n, req));
         }
 
-        private IEnumerable<object> interpretNode(XNode node, HttpRequest req)
+        private IEnumerable<object> interpretNode(XNode node, UrlPathRequest req)
         {
             if (node is XText)
             {
@@ -1321,7 +1321,7 @@ namespace RT.DocGen
             }
         }
 
-        private object interpretCref(string token, HttpRequest req, bool includeNamespaces)
+        private object interpretCref(string token, UrlPathRequest req, bool includeNamespaces)
         {
             Type actual;
             if (_types.ContainsKey(token))
@@ -1355,7 +1355,7 @@ namespace RT.DocGen
             }
         }
 
-        private IEnumerable<object> interpretPre(XElement elem, HttpRequest req)
+        private IEnumerable<object> interpretPre(XElement elem, UrlPathRequest req)
         {
             // Hideosly complex code to remove common indentation from each line, while allowing something like <see cref="..." /> inside a <code> element.
             // Example: suppose the input is "<code>\n    XYZ<see/>\n\n    ABC</code>". Note <see/> is an inline element.
