@@ -266,7 +266,7 @@ namespace RT.DocGen
 
                 if (req.RestUrlWithoutQuery == "/logout")
                 {
-                    session.CloseAction = SessionCloseAction.Delete;
+                    session.Delete = true;
                     return HttpResponse.Redirect(req.BaseUrl);
                 }
 
