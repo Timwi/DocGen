@@ -66,6 +66,11 @@ namespace RT.DocGen
         private class docGenSession : FileSession
         {
             public string Username;
+            public override void CleanUp(HttpResponse response)
+            {
+                SessionModified = true;
+                base.CleanUp(response);
+            }
         }
 
         private SortedDictionary<string, namespaceInfo> _namespaces;
