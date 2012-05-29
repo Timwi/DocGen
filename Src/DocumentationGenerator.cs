@@ -255,44 +255,44 @@ namespace RT.DocGen
         /// <summary>Provides the HTTP request handler for the documentation.</summary>
         public HttpResponse Handler(UrlPathRequest req)
         {
-            if (req.RestUrlWithoutQuery == "")
+            if (req.UrlWithoutQuery == "")
                 return HttpResponse.Redirect(req.BaseUrl + "/");
 
-            if (req.RestUrlWithoutQuery == "/css")
+            if (req.UrlWithoutQuery == "/css")
                 return HttpResponse.Create(_css, "text/css; charset=utf-8");
 
             return Session.Enable<docGenSession>(req, session =>
             {
-                if (req.RestUrlWithoutQuery == "/login")
+                if (req.UrlWithoutQuery == "/login")
                     return Authentication.LoginHandler(req, _usernamePasswordFile, u => session.Username = u, req.BaseUrl, "the documentation");
 
                 if (session.Username == null && _usernamePasswordFile != null)
                     return HttpResponse.Redirect(req.BaseUrl + "/login?returnto=" + req.OriginalUrl.UrlEscape());
 
-                if (req.RestUrlWithoutQuery == "/logout")
+                if (req.UrlWithoutQuery == "/logout")
                 {
                     session.Delete = true;
                     return HttpResponse.Redirect(req.BaseUrl);
                 }
 
-                if (req.RestUrlWithoutQuery == "/changepassword")
+                if (req.UrlWithoutQuery == "/changepassword")
                     return Authentication.ChangePasswordHandler(req, _usernamePasswordFile, req.BaseUrl, true);
 
                 string ns = null;
                 Type type = null;
                 MemberInfo member = null;
-                string token = req.RestUrl.Substring(1).UrlUnescape();
+                string token = req.Url.Substring(1).UrlUnescape();
 
                 HttpStatusCode status = HttpStatusCode._200_OK;
                 string title;
                 object content;
 
-                if (req.RestUrlWithoutQuery == "/all:types")
+                if (req.UrlWithoutQuery == "/all:types")
                 {
                     title = "All types";
                     content = generateAllTypes(req);
                 }
-                else if (req.RestUrlWithoutQuery == "/all:members")
+                else if (req.UrlWithoutQuery == "/all:members")
                 {
                     title = "All members";
                     content = generateAllMembers(req);
@@ -328,7 +328,7 @@ namespace RT.DocGen
                     title += member.MemberType == MemberTypes.Constructor ? stringSoup(friendlyTypeName(type, includeOuterTypes: true)) : member.Name;
                     content = generateMemberDocumentation(_members[token].Member, _members[token].Documentation, req);
                 }
-                else if (req.RestUrlWithoutQuery == "/")
+                else if (req.UrlWithoutQuery == "/")
                 {
                     title = null;
                     content = new DIV("Select an item from the list on the left.") { class_ = "warning" };
