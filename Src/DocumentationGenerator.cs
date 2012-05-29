@@ -267,7 +267,7 @@ namespace RT.DocGen
                     return Authentication.LoginHandler(req, _usernamePasswordFile, u => session.Username = u, req.BaseUrl, "the documentation");
 
                 if (session.Username == null && _usernamePasswordFile != null)
-                    return HttpResponse.Redirect(req.BaseUrl + "/login?returnto=" + req.Url.UrlEscape());
+                    return HttpResponse.Redirect(req.BaseUrl + "/login?returnto=" + req.OriginalUrl.UrlEscape());
 
                 if (req.RestUrlWithoutQuery == "/logout")
                 {
@@ -385,7 +385,7 @@ namespace RT.DocGen
                                         )
                                     ),
                                     _usernamePasswordFile == null ? null : new DIV { class_ = "auth" }._(
-                                        new A("Logout") { href = req.BaseUrl + "/logout" }, " | ", new A("Change password") { href = req.BaseUrl + "/changepassword?returnto=" + req.Url.UrlEscape() }
+                                        new A("Logout") { href = req.BaseUrl + "/logout" }, " | ", new A("Change password") { href = req.BaseUrl + "/changepassword?returnto=" + req.OriginalUrl.UrlEscape() }
                                     )
                                 ),
                                 new TD { class_ = "content" }._(content)
