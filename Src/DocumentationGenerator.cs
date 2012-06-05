@@ -253,46 +253,46 @@ namespace RT.DocGen
         }
 
         /// <summary>Provides the HTTP request handler for the documentation.</summary>
-        public HttpResponse Handler(UrlPathRequest req)
+        public HttpResponse Handler(HttpRequest req)
         {
-            if (req.UrlWithoutQuery == "")
-                return HttpResponse.Redirect(req.BaseUrl + "/");
+            if (req.Url.Subpath == "")
+                return HttpResponse.Redirect(req.Url.BasePath + "/");
 
-            if (req.UrlWithoutQuery == "/css")
+            if (req.Url.Subpath == "/css")
                 return HttpResponse.Create(_css, "text/css; charset=utf-8");
 
             return Session.Enable<docGenSession>(req, session =>
             {
-                if (req.UrlWithoutQuery == "/login")
-                    return Authentication.LoginHandler(req, _usernamePasswordFile, u => session.Username = u, req.BaseUrl, "the documentation");
+                if (req.Url.Subpath == "/login")
+                    return Authentication.LoginHandler(req, _usernamePasswordFile, u => session.Username = u, req.Url.BasePath, "the documentation");
 
                 if (session.Username == null && _usernamePasswordFile != null)
-                    return HttpResponse.Redirect(req.BaseUrl + "/login?returnto=" + req.OriginalUrl.UrlEscape());
+                    return HttpResponse.Redirect(req.Url.BasePath + "/login?returnto=" + req.Url.ToHref().UrlEscape());
 
-                if (req.UrlWithoutQuery == "/logout")
+                if (req.Url.Subpath == "/logout")
                 {
                     session.Delete = true;
-                    return HttpResponse.Redirect(req.BaseUrl);
+                    return HttpResponse.Redirect(req.Url.BasePath);
                 }
 
-                if (req.UrlWithoutQuery == "/changepassword")
-                    return Authentication.ChangePasswordHandler(req, _usernamePasswordFile, req.BaseUrl, true);
+                if (req.Url.Subpath == "/changepassword")
+                    return Authentication.ChangePasswordHandler(req, _usernamePasswordFile, req.Url.BasePath, true);
 
                 string ns = null;
                 Type type = null;
                 MemberInfo member = null;
-                string token = req.Url.Substring(1).UrlUnescape();
+                string token = req.Url.Subpath.Substring(1).UrlUnescape();
 
                 HttpStatusCode status = HttpStatusCode._200_OK;
                 string title;
                 object content;
 
-                if (req.UrlWithoutQuery == "/all:types")
+                if (req.Url.Subpath == "/all:types")
                 {
                     title = "All types";
                     content = generateAllTypes(req);
                 }
-                else if (req.UrlWithoutQuery == "/all:members")
+                else if (req.Url.Subpath == "/all:members")
                 {
                     title = "All members";
                     content = generateAllMembers(req);
@@ -328,7 +328,7 @@ namespace RT.DocGen
                     title += member.MemberType == MemberTypes.Constructor ? stringSoup(friendlyTypeName(type, includeOuterTypes: true)) : member.Name;
                     content = generateMemberDocumentation(_members[token].Member, _members[token].Documentation, req);
                 }
-                else if (req.UrlWithoutQuery == "/")
+                else if (req.Url.Subpath == "/")
                 {
                     title = null;
                     content = new DIV("Select an item from the list on the left.") { class_ = "warning" };
@@ -347,7 +347,7 @@ namespace RT.DocGen
                 var html = new HTML(
                     new HEAD(
                         new TITLE(title),
-                        new LINK { href = req.BaseUrl + "/css", rel = "stylesheet", type = "text/css" }
+                        new LINK { href = req.Url.BasePath + "/css", rel = "stylesheet", type = "text/css" }
                     ),
                     new BODY(
                         new TABLE { class_ = "layout" }._(
@@ -355,10 +355,10 @@ namespace RT.DocGen
                                 new TD { class_ = "sidebar" }._(
                                     new DIV { class_ = "tree" }._(
                                         new DIV { class_ = "links" }._("Show all: ",
-                                            new A("types") { href = req.BaseUrl + "/all:types", accesskey = "t", title = "Show all types [Alt-T]" }, " | ",
-                                            new A("members") { href = req.BaseUrl + "/all:members", accesskey = "m", title = "Show all members [Alt-M]" }
+                                            new A("types") { href = req.Url.BasePath + "/all:types", accesskey = "t", title = "Show all types [Alt-T]" }, " | ",
+                                            new A("members") { href = req.Url.BasePath + "/all:members", accesskey = "m", title = "Show all members [Alt-M]" }
                                         ),
-                                        new UL(_namespaces.Select(nkvp => new LI { class_ = "namespace" }._(new A(nkvp.Key) { href = req.BaseUrl + "/" + nkvp.Key.UrlEscape() },
+                                        new UL(_namespaces.Select(nkvp => new LI { class_ = "namespace" }._(new A(nkvp.Key) { href = req.Url.BasePath + "/" + nkvp.Key.UrlEscape() },
                                             ns == null || ns != nkvp.Key ? null :
                                             nkvp.Value.Types.Where(tkvp => !tkvp.Value.Type.IsNested).Select(tkvp => generateTypeBullet(tkvp.Key, type, member, req))
                                         )))
@@ -385,7 +385,7 @@ namespace RT.DocGen
                                         )
                                     ),
                                     _usernamePasswordFile == null ? null : new DIV { class_ = "auth" }._(
-                                        new A("Logout") { href = req.BaseUrl + "/logout" }, " | ", new A("Change password") { href = req.BaseUrl + "/changepassword?returnto=" + req.OriginalUrl.UrlEscape() }
+                                        new A("Logout") { href = req.Url.BasePath + "/logout" }, " | ", new A("Change password") { href = req.Url.BasePath + "/changepassword?returnto=" + req.Url.ToHref().UrlEscape() }
                                     )
                                 ),
                                 new TD { class_ = "content" }._(content)
@@ -398,7 +398,7 @@ namespace RT.DocGen
             });
         }
 
-        private IEnumerable<object> generateAllTypes(UrlPathRequest req)
+        private IEnumerable<object> generateAllTypes(HttpRequest req)
         {
             var first = true;
             foreach (var item in _types.Select(k => new
@@ -410,12 +410,12 @@ namespace RT.DocGen
             {
                 if (!first)
                     yield return " | ";
-                yield return new A(friendlyTypeName(item.Type, span: true)) { href = req.BaseUrl + "/" + item.FullName.UrlEscape() };
+                yield return new A(friendlyTypeName(item.Type, span: true)) { href = req.Url.BasePath + "/" + item.FullName.UrlEscape() };
                 first = false;
             }
         }
 
-        private IEnumerable<object> generateAllMembers(UrlPathRequest req)
+        private IEnumerable<object> generateAllMembers(HttpRequest req)
         {
             var eligibleMembers = _members.Where(k => k.Value.Member.MemberType != MemberTypes.NestedType);
 
@@ -457,7 +457,7 @@ namespace RT.DocGen
                 {
                     if (!first)
                         yield return " | ";
-                    yield return friendlyMemberName(item.Member, parameterTypes: true, url: req.BaseUrl + "/" + item.FullName.UrlEscape(), baseUrl: req.BaseUrl);
+                    yield return friendlyMemberName(item.Member, parameterTypes: true, url: req.Url.BasePath + "/" + item.FullName.UrlEscape(), baseUrl: req.Url.BasePath);
                     first = false;
                 }
             }
@@ -936,13 +936,13 @@ namespace RT.DocGen
             return getMethod == null ? property.GetSetMethod().IsStatic : getMethod.IsStatic;
         }
 
-        private object generateTypeBullet(string typeFullName, Type selectedType, MemberInfo selectedMember, UrlPathRequest req)
+        private object generateTypeBullet(string typeFullName, Type selectedType, MemberInfo selectedMember, HttpRequest req)
         {
             var typeinfo = _types[typeFullName];
             string cssClass = typeinfo.GetTypeCssClass() + " type";
             if (typeinfo.Documentation == null) cssClass += " missing";
             if (typeinfo.Type == selectedType) cssClass += " highlighted";
-            return new DIV { class_ = cssClass }._(new DIV(new SPAN(typeinfo.GetTypeLetters()) { class_ = "typeicon" }, new A(friendlyTypeName(typeinfo.Type, span: true)) { href = req.BaseUrl + "/" + typeFullName.UrlEscape() }) { class_ = "line" },
+            return new DIV { class_ = cssClass }._(new DIV(new SPAN(typeinfo.GetTypeLetters()) { class_ = "typeicon" }, new A(friendlyTypeName(typeinfo.Type, span: true)) { href = req.Url.BasePath + "/" + typeFullName.UrlEscape() }) { class_ = "line" },
                 selectedType == null || !isNestedTypeOf(selectedType, typeinfo.Type) || typeof(Delegate).IsAssignableFrom(typeinfo.Type) ? null :
                 typeinfo.Members.Where(mkvp => isPublic(mkvp.Value.Member)).Select(mkvp =>
                 {
@@ -950,7 +950,7 @@ namespace RT.DocGen
                     if (mkvp.Value.Documentation == null) css += " missing";
                     if (mkvp.Value.Member == selectedMember) css += " highlighted";
                     return mkvp.Value.Member.MemberType != MemberTypes.NestedType
-                        ? new DIV { class_ = css }._(new SPAN(mkvp.Value.Member.MemberType.ToString()[0]) { class_ = "icon" }, new A(friendlyMemberName(mkvp.Value.Member, parameterNames: true, omitGenericTypeParameters: true)) { href = req.BaseUrl + "/" + mkvp.Key.UrlEscape() })
+                        ? new DIV { class_ = css }._(new SPAN(mkvp.Value.Member.MemberType.ToString()[0]) { class_ = "icon" }, new A(friendlyMemberName(mkvp.Value.Member, parameterNames: true, omitGenericTypeParameters: true)) { href = req.Url.BasePath + "/" + mkvp.Key.UrlEscape() })
                         : generateTypeBullet(getTypeFullName((Type) mkvp.Value.Member), selectedType, selectedMember, req);
                 })
             );
@@ -963,7 +963,7 @@ namespace RT.DocGen
             return isNestedTypeOf(nestedType.DeclaringType, containingType);
         }
 
-        private IEnumerable<object> generateNamespaceDocumentation(string namespaceName, UrlPathRequest req)
+        private IEnumerable<object> generateNamespaceDocumentation(string namespaceName, HttpRequest req)
         {
             yield return new H1("Namespace: ", namespaceName);
             yield return new TABLE { class_ = "doclist" }._(
@@ -972,7 +972,7 @@ namespace RT.DocGen
                     string cssClass = kvp.Value.GetTypeCssClass() + " type";
                     if (kvp.Value.Documentation == null) cssClass += " missing";
                     return new TR(
-                        new TD { class_ = cssClass }._(new SPAN(kvp.Value.GetTypeLetters()) { class_ = "typeicon" }, new A(friendlyTypeName(kvp.Value.Type, span: true)) { href = req.BaseUrl + "/" + kvp.Key.UrlEscape() }),
+                        new TD { class_ = cssClass }._(new SPAN(kvp.Value.GetTypeLetters()) { class_ = "typeicon" }, new A(friendlyTypeName(kvp.Value.Type, span: true)) { href = req.Url.BasePath + "/" + kvp.Key.UrlEscape() }),
                         new TD(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
                             ? (object) new EM("This type is not documented.")
                             : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req)));
@@ -980,7 +980,7 @@ namespace RT.DocGen
             );
         }
 
-        private IEnumerable<object> generateMemberDocumentation(MemberInfo member, XElement document, UrlPathRequest req)
+        private IEnumerable<object> generateMemberDocumentation(MemberInfo member, XElement document, HttpRequest req)
         {
             bool isStatic =
                 member.MemberType == MemberTypes.Field && (member as FieldInfo).IsStatic ||
@@ -995,9 +995,9 @@ namespace RT.DocGen
                 member.MemberType == MemberTypes.Property ? (isStatic ? "Static property: " : "Property: ") : "Member: ",
                 friendlyMemberName(member, returnType: true, parameterTypes: true)
             );
-            yield return new UL(new LI("Declared in: ", friendlyTypeName(member.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true)));
+            yield return new UL(new LI("Declared in: ", friendlyTypeName(member.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.BasePath, span: true)));
             yield return new H2("Declaration");
-            yield return new PRE((isStatic ? "static " : null), friendlyMemberName(member, returnType: true, parameterTypes: true, parameterNames: true, parameterDefaultValues: true, variance: true, indent: true, baseUrl: req.BaseUrl));
+            yield return new PRE((isStatic ? "static " : null), friendlyMemberName(member, returnType: true, parameterTypes: true, parameterNames: true, parameterDefaultValues: true, variance: true, indent: true, baseUrl: req.Url.BasePath));
 
             if (document != null)
             {
@@ -1049,7 +1049,7 @@ namespace RT.DocGen
                         return new TR(
                             new TD { class_ = "item" }._(
                                 pi.IsOut ? "out " : null,
-                                friendlyTypeName(pi.ParameterType, includeOuterTypes: true, baseUrl: req.BaseUrl, inclRef: !pi.IsOut, span: true),
+                                friendlyTypeName(pi.ParameterType, includeOuterTypes: true, baseUrl: req.Url.BasePath, inclRef: !pi.IsOut, span: true),
                                 " ",
                                 new STRONG(pi.Name)
                             ),
@@ -1065,7 +1065,7 @@ namespace RT.DocGen
                 yield return generateGenericTypeParameterTable(((MethodBase) member).GetGenericArguments(), document, req);
         }
 
-        private IEnumerable<object> generateTypeDocumentation(Type type, XElement document, UrlPathRequest req)
+        private IEnumerable<object> generateTypeDocumentation(Type type, XElement document, HttpRequest req)
         {
             bool isDelegate = typeof(Delegate).IsAssignableFrom(type);
 
@@ -1077,8 +1077,8 @@ namespace RT.DocGen
             );
 
             yield return new UL { class_ = "typeinfo" }._(
-                new LI("Namespace: ", new A(type.Namespace) { class_ = "namespace", href = req.BaseUrl + "/" + type.Namespace.UrlEscape() }),
-                type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true)) : null,
+                new LI("Namespace: ", new A(type.Namespace) { class_ = "namespace", href = req.Url.BasePath + "/" + type.Namespace.UrlEscape() }),
+                type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.BasePath, span: true)) : null,
                 inheritsFrom(type, req),
                 implementsInterfaces(type, req),
                 type.IsInterface ? implementedBy(type, req) : derivedTypes(type, req)
@@ -1089,7 +1089,7 @@ namespace RT.DocGen
             {
                 m = type.GetMethod("Invoke");
                 yield return new H2("Declaration");
-                yield return new PRE(friendlyMethodName(m, returnType: true, parameterTypes: true, parameterNames: true, includeNamespaces: true, variance: true, indent: true, baseUrl: req.BaseUrl, isDelegate: true));
+                yield return new PRE(friendlyMethodName(m, returnType: true, parameterTypes: true, parameterNames: true, includeNamespaces: true, variance: true, indent: true, baseUrl: req.Url.BasePath, isDelegate: true));
             }
 
             if (document == null)
@@ -1114,7 +1114,7 @@ namespace RT.DocGen
                             return new TR(
                                 new TD { class_ = "item" }._(
                                     pi.IsOut ? "out " : null,
-                                    friendlyTypeName(pi.ParameterType, includeOuterTypes: true, baseUrl: req.BaseUrl, inclRef: !pi.IsOut, span: true),
+                                    friendlyTypeName(pi.ParameterType, includeOuterTypes: true, baseUrl: req.Url.BasePath, inclRef: !pi.IsOut, span: true),
                                     " ",
                                     new STRONG(pi.Name)
                                 ),
@@ -1173,7 +1173,7 @@ namespace RT.DocGen
                     );
                     yield return new TABLE { class_ = "doclist" }._(
                         gr.Select(kvp => new TR(
-                            new TD { class_ = "item" }._(friendlyMemberName(kvp.Value.Member, returnType: true, parameterTypes: true, parameterNames: true, url: req.BaseUrl + "/" + kvp.Key.UrlEscape(), baseUrl: req.BaseUrl)),
+                            new TD { class_ = "item" }._(friendlyMemberName(kvp.Value.Member, returnType: true, parameterTypes: true, parameterNames: true, url: req.Url.BasePath + "/" + kvp.Key.UrlEscape(), baseUrl: req.Url.BasePath)),
                             new TD(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
                                 ? (object) new EM("This member is not documented.")
                                 : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req))
@@ -1183,7 +1183,7 @@ namespace RT.DocGen
             }
         }
 
-        private LI inheritsFrom(Type type, UrlPathRequest req)
+        private LI inheritsFrom(Type type, HttpRequest req)
         {
             if ((type.IsAbstract && type.IsSealed) || type.IsInterface)
                 return null;
@@ -1196,14 +1196,14 @@ namespace RT.DocGen
                 ));
         }
 
-        private object inheritsFromBullet(Type type, UrlPathRequest req)
+        private object inheritsFromBullet(Type type, HttpRequest req)
         {
             if (type == null)
                 return null;
-            return new UL(new LI(friendlyTypeName(type, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true), type.IsSealed ? " (sealed)" : null, inheritsFromBullet(type.BaseType, req)));
+            return new UL(new LI(friendlyTypeName(type, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.BasePath, span: true), type.IsSealed ? " (sealed)" : null, inheritsFromBullet(type.BaseType, req)));
         }
 
-        private LI implementsInterfaces(Type type, UrlPathRequest req)
+        private LI implementsInterfaces(Type type, HttpRequest req)
         {
             var infs = type.GetInterfaces();
             if (!infs.Any())
@@ -1214,13 +1214,13 @@ namespace RT.DocGen
                     "Implements:", new UL(infs
                         .Select(i => new { Interface = i, Directly = type.BaseType == null || !type.BaseType.GetInterfaces().Any(i2 => i2.Equals(i)) })
                         .OrderBy(inf => inf.Directly ? 0 : 1).ThenBy(inf => inf.Interface.Name)
-                        .Select(inf => new LI(friendlyTypeName(inf.Interface, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true), inf.Directly ? " (directly)" : null))
+                        .Select(inf => new LI(friendlyTypeName(inf.Interface, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.BasePath, span: true), inf.Directly ? " (directly)" : null))
                     )
                 )
             );
         }
 
-        private LI implementedBy(Type type, UrlPathRequest req)
+        private LI implementedBy(Type type, HttpRequest req)
         {
             var implementedBy = _types.Select(kvp => kvp.Value.Type).Where(t => t.GetInterfaces().Any(i => i.Equals(type) || (i.IsGenericType && i.GetGenericTypeDefinition().Equals(type)))).ToArray();
             if (!implementedBy.Any())
@@ -1228,12 +1228,12 @@ namespace RT.DocGen
             return new LI(
                 new A("Show types that implement this interface...") { href = "#", onclick = "document.getElementById('implementedby_link').style.display='none';document.getElementById('implementedby_tree').style.display='block';return false;", id = "implementedby_link" },
                 new DIV { id = "implementedby_tree", style = "display:none" }._(
-                    "Implemented by:", new UL(implementedBy.Select(t => new LI(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true))))
+                    "Implemented by:", new UL(implementedBy.Select(t => new LI(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.BasePath, span: true))))
                 )
             );
         }
 
-        private LI derivedTypes(Type type, UrlPathRequest req)
+        private LI derivedTypes(Type type, HttpRequest req)
         {
             var derivedTypes = _types.Select(kvp => kvp.Value.Type)
                 .Where(t => t.BaseType == type || (t.BaseType != null && t.BaseType.IsGenericType && t.BaseType.GetGenericTypeDefinition() == type))
@@ -1244,12 +1244,12 @@ namespace RT.DocGen
             return new LI(
                 new A("Show derived types...") { href = "#", onclick = "document.getElementById('derivedtypes_link').style.display='none';document.getElementById('derivedtypes_tree').style.display='block';return false;", id = "derivedtypes_link" },
                 new DIV { id = "derivedtypes_tree", style = "display:none" }._(
-                    "Derived types:", new UL(derivedTypes.Select(t => new LI(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true))))
+                    "Derived types:", new UL(derivedTypes.Select(t => new LI(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.BasePath, span: true))))
                 )
             );
         }
 
-        private IEnumerable<object> generateGenericTypeParameterTable(Type[] genericTypeArguments, XElement document, UrlPathRequest req)
+        private IEnumerable<object> generateGenericTypeParameterTable(Type[] genericTypeArguments, XElement document, HttpRequest req)
         {
             if (!genericTypeArguments.Any())
                 yield break;
@@ -1266,7 +1266,7 @@ namespace RT.DocGen
                             docElem == null ? (object) new EM("This type parameter is not documented.") : interpretNodes(docElem.Nodes(), req),
                             constraints == null || constraints.Length == 0 ? null :
                             constraints.Length > 0 ? new object[] { new BR(), new EM("Must be derived from:"), " ",
-                                constraints.Select(c => friendlyTypeName(c, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true)).InsertBetween<object>(", ") } : null,
+                                constraints.Select(c => friendlyTypeName(c, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.BasePath, span: true)).InsertBetween<object>(", ") } : null,
                             gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.DefaultConstructorConstraint) ? new object[] { new BR(), new EM("Must have a default constructor.") } : null,
                             gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint) ? new object[] { new BR(), new EM("Must be a non-nullable value type.") } : null,
                             gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint) ? new object[] { new BR(), new EM("Must be a reference type.") } : null,
@@ -1278,12 +1278,12 @@ namespace RT.DocGen
             );
         }
 
-        private object interpretNodes(IEnumerable<XNode> nodes, UrlPathRequest req)
+        private object interpretNodes(IEnumerable<XNode> nodes, HttpRequest req)
         {
             return nodes.Select(n => interpretNode(n, req));
         }
 
-        private IEnumerable<object> interpretNode(XNode node, UrlPathRequest req)
+        private IEnumerable<object> interpretNode(XNode node, HttpRequest req)
         {
             if (node is XText)
             {
@@ -1326,13 +1326,13 @@ namespace RT.DocGen
             }
         }
 
-        private object interpretCref(string token, UrlPathRequest req, bool includeNamespaces)
+        private object interpretCref(string token, HttpRequest req, bool includeNamespaces)
         {
             Type actual;
             if (_types.ContainsKey(token))
-                return friendlyTypeName(_types[token].Type, includeNamespaces, includeOuterTypes: true, baseUrl: req.BaseUrl, span: true);
+                return friendlyTypeName(_types[token].Type, includeNamespaces, includeOuterTypes: true, baseUrl: req.Url.BasePath, span: true);
             else if (_members.ContainsKey(token))
-                return friendlyMemberName(_members[token].Member, parameterTypes: true, namespaces: includeNamespaces, url: req.BaseUrl + "/" + token.UrlEscape(), baseUrl: req.BaseUrl);
+                return friendlyMemberName(_members[token].Member, parameterTypes: true, namespaces: includeNamespaces, url: req.Url.BasePath + "/" + token.UrlEscape(), baseUrl: req.Url.BasePath);
             else if (token.StartsWith("T:") && (actual = Type.GetType(token.Substring(2), false, true)) != null)
                 return new SPAN(foreignTypeName(actual, includeNamespaces)) { class_ = "type", title = actual.FullName };
             else
@@ -1360,7 +1360,7 @@ namespace RT.DocGen
             }
         }
 
-        private IEnumerable<object> interpretPre(XElement elem, UrlPathRequest req)
+        private IEnumerable<object> interpretPre(XElement elem, HttpRequest req)
         {
             // Hideosly complex code to remove common indentation from each line, while allowing something like <see cref="..." /> inside a <code> element.
             // Example: suppose the input is "<code>\n    XYZ<see/>\n\n    ABC</code>". Note <see/> is an inline element.
