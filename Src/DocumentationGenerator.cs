@@ -71,6 +71,13 @@ namespace RT.DocGen
                 SessionModified = true;
                 base.CleanUp(response);
             }
+            public void SetUsername(string username)
+            {
+                if (username == null)
+                    Delete = true;
+                else
+                    Username = username;
+            }
         }
 
         private SortedDictionary<string, namespaceInfo> _namespaces;
@@ -252,31 +259,36 @@ namespace RT.DocGen
             return "T:" + (t.IsGenericType ? t.GetGenericTypeDefinition() : t).FullName.TrimEnd('&').Replace("+", ".");
         }
 
+        private Authenticator _authenticator;
+        private UrlPathResolver _resolver;
+
         /// <summary>Provides the HTTP request handler for the documentation.</summary>
-        public HttpResponse Handler(HttpRequest req)
+        public HttpResponse Handler(HttpRequest request)
+        {
+            if (_authenticator == null && _usernamePasswordFile != null)
+                _authenticator = new Authenticator(_usernamePasswordFile, request.Url.WithPathOnly("/").ToHref(), "the documentation");
+
+            if (_resolver == null)
+            {
+                _resolver = new UrlPathResolver();
+                _resolver.Add(new UrlPathHook(path: "/css", specificPath: true, handler: req => HttpResponse.Create(_css, "text/css; charset=utf-8")));
+                if (_usernamePasswordFile != null)
+                    _resolver.Add(new UrlPathHook(path: "/auth", handler: req => Session.Enable<docGenSession>(req, session => _authenticator.Handle(req, session.Username, session.SetUsername))));
+                _resolver.Add(new UrlPathHook(handler: handle));
+            }
+
+            return _resolver.Handle(request);
+        }
+
+        private HttpResponse handle(HttpRequest req)
         {
             if (req.Url.Path == "")
-                return HttpResponse.Redirect(req.Url.WithPathOnly("/"));
-
-            if (req.Url.Path == "/css")
-                return HttpResponse.Create(_css, "text/css; charset=utf-8");
+                return HttpResponse.Redirect(req.Url.WithPath("/"));
 
             return Session.Enable<docGenSession>(req, session =>
             {
-                if (req.Url.Path == "/login")
-                    return Authentication.LoginHandler(req, _usernamePasswordFile, u => session.Username = u, req.Url.WithPathOnly("/").ToHref(), "the documentation");
-
                 if (session.Username == null && _usernamePasswordFile != null)
-                    return HttpResponse.Redirect(req.Url.WithPathOnly("/login").WithQuery("returnto", req.Url.ToHref()));
-
-                if (req.Url.Path == "/logout")
-                {
-                    session.Delete = true;
-                    return HttpResponse.Redirect(req.Url.WithPathOnly("/"));
-                }
-
-                if (req.Url.Path == "/changepassword")
-                    return Authentication.ChangePasswordHandler(req, _usernamePasswordFile, req.Url.WithPathOnly("/").ToHref(), true);
+                    return HttpResponse.Redirect(req.Url.WithPathOnly("/auth/login").WithQuery("returnto", req.Url.ToHref()));
 
                 string ns = null;
                 Type type = null;
