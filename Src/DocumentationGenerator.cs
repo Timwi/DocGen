@@ -146,7 +146,7 @@ namespace RT.DocGen
             span.parameter, span.typeparameter, span.member { white-space: nowrap; }
             h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; }
             pre { background: #eee; border: 1px solid #ccc; padding: 1em 2em; }
-            ul.extra { margin: .2em 0 .5em 2em; font-size: 75%; color: #888; }
+            ul.extra { margin: .2em 0 .2em 1.5em; font-size: 75%; color: #888; }
             ul.extra li { margin: .2em 0; }
         ";
 
@@ -416,66 +416,51 @@ namespace RT.DocGen
 
         private IEnumerable<object> generateAllTypes(HttpRequest req)
         {
-            var first = true;
-            foreach (var item in _types.Select(k => new
-            {
-                Type = k.Value.Type,
-                SortKey = stringSoup(friendlyTypeName(k.Value.Type, span: false)),
-                FullName = k.Key
-            }).OrderBy(n => n.SortKey))
-            {
-                if (!first)
-                    yield return " | ";
-                yield return new A(friendlyTypeName(item.Type, span: true)) { href = req.Url.WithPathOnly("/" + item.FullName.UrlEscape()).ToHref() };
-                first = false;
-            }
+            return generateAll(
+                _types,
+                k => typeof(Delegate).IsAssignableFrom(k.Value.Type) ? 4 : k.Value.Type.IsInterface ? 3 : k.Value.Type.IsEnum ? 2 : k.Value.Type.IsValueType ? 1 : 0,
+                new string[] { "Classes", "Structs", "Enums", "Interfaces", "Delegates" },
+                "No types are defined.",
+                k => stringSoup(friendlyTypeName(k.Value.Type)),
+                k => friendlyTypeName(k.Value.Type, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true, modifiers: true, variance: true)
+            );
         }
 
         private IEnumerable<object> generateAllMembers(HttpRequest req)
         {
-            var eligibleMembers = _members.Where(k => k.Value.Member.MemberType != MemberTypes.NestedType);
+            return generateAll(
+                _members.Where(k => k.Value.Member.MemberType != MemberTypes.NestedType),
+                k =>
+                    k.Value.Member.MemberType == MemberTypes.Constructor ? 0 :
+                    k.Value.Member.MemberType == MemberTypes.Method ? 1 :
+                    k.Value.Member.MemberType == MemberTypes.Property ? 2 :
+                    k.Value.Member.MemberType == MemberTypes.Event ? 3 : 4,
+                new string[] { "Constructors", "Methods", "Properties", "Events", "Fields" },
+                "No members are defined.",
+                k => stringSoup(friendlyMemberName(k.Value.Member, parameterTypes: true, stringOnly: true)),
+                k => friendlyMemberName(k.Value.Member, parameterTypes: true, url: req.Url.WithPathOnly("/" + k.Key.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref())
+            );
+        }
 
-            Func<MemberTypes, int> sortKey = mt =>
-                mt == MemberTypes.Constructor ? 0 :
-                mt == MemberTypes.Method ? 1 :
-                mt == MemberTypes.Property ? 2 :
-                mt == MemberTypes.Event ? 3 : 4;
-
-            Func<MemberTypes, string> humanReadable = mt =>
-                mt == MemberTypes.Constructor ? "Constructors" :
-                mt == MemberTypes.Method ? "Methods" :
-                mt == MemberTypes.Property ? "Properties" :
-                mt == MemberTypes.Event ? "Events" : "Fields";
-
-            var memberTypes = eligibleMembers.Select(k => k.Value.Member.MemberType).Distinct().OrderBy(k => sortKey(k)).ToArray();
-            if (memberTypes.Length == 0)
+        private IEnumerable<object> generateAll<TSource>(IEnumerable<TSource> source, Func<TSource, int> categorize,
+            string[] humanReadable, string noneDefined, Func<TSource, string> itemSortKey, Func<TSource, object> html)
+        {
+            var categories = source.Select(categorize).Distinct().Order().ToArray();
+            if (categories.Length == 0)
             {
-                yield return new DIV { class_ = "warning" }._("No members are defined.");
+                yield return new DIV { class_ = "warning" }._(noneDefined);
                 yield break;
             }
 
             yield return new DIV(
                 new STRONG("Index: "),
-                memberTypes.Select(mt => new A(humanReadable(mt)) { href = "#" + mt.ToString() }).InsertBetween<object>(" | ")
+                categories.Select(cat => new A { href = "#cat" + cat }._(humanReadable[cat])).InsertBetween<object>(" | ")
             );
 
-            foreach (var group in eligibleMembers.Select(k => new
+            foreach (var group in source.GroupBy(categorize).OrderBy(gr => gr.Key))
             {
-                Member = k.Value.Member,
-                SortKey = stringSoup(friendlyMemberName(k.Value.Member, parameterTypes: true, stringOnly: true)),
-                FullName = k.Key
-            }).GroupBy(n => n.Member.MemberType).OrderBy(gr => sortKey(gr.Key)))
-            {
-                yield return new H2(humanReadable(group.Key)) { id = group.Key.ToString() };
-
-                var first = true;
-                foreach (var item in group.OrderBy(n => n.SortKey))
-                {
-                    if (!first)
-                        yield return " | ";
-                    yield return friendlyMemberName(item.Member, parameterTypes: true, url: req.Url.WithPathOnly("/" + item.FullName.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("/").ToHref());
-                    first = false;
-                }
+                yield return new H2(humanReadable[group.Key]) { id = "cat" + group.Key };
+                yield return group.OrderBy(itemSortKey).Select(html).InsertBetween(" | ");
             }
         }
 
