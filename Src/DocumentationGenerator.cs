@@ -103,8 +103,9 @@ namespace RT.DocGen
             .sidebar div.tree div.type > div.line { font-weight: bold; padding-left: 0.5em; text-indent: -2.5em; }
             .type span.typeicon, .sidebar div.member span.icon { display: inline-block; width: 1.5em; margin-right: 0.5em; text-indent: 0; text-align: center; color: #000; -moz-border-radius: 0.7em 0.7em 0.7em 0.7em; }
             .sidebar div.legend div.type, .sidebar div.legend div.member { padding-left: 0; white-space: nowrap; }
-            .Method, code { font-family: inherit; font-weight: normal; background: #eee; padding: 0.1em; }
-            .sidebar .Method, pre .Method, table.doclist td.item .Method { background: transparent; padding: 0; }
+            .Method, .Constructor, code { font-family: inherit; font-weight: normal; background: #eee; padding: 0.1em; }
+            .sidebar .Method, pre .Method, table.doclist td.item .Method,
+                .sidebar .Constructor, pre .Constructor, table.doclist td.item .Constructor { background: transparent; padding: 0; }
 
             span.icon, span.typeicon { font-size: smaller; }
             td.type span.typeicon { font-size: normal; width: 2em; }
@@ -145,6 +146,8 @@ namespace RT.DocGen
             span.parameter, span.typeparameter, span.member { white-space: nowrap; }
             h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; }
             pre { background: #eee; border: 1px solid #ccc; padding: 1em 2em; }
+            ul.extra { margin: .2em 0 .5em 2em; font-size: 75%; color: #888; }
+            ul.extra li { margin: .2em 0; }
         ";
 
         private class memberComparer : IComparer<string>
@@ -397,8 +400,8 @@ namespace RT.DocGen
                                         )
                                     ),
                                     _usernamePasswordFile == null ? null : new DIV { class_ = "auth" }._(
-                                        new A("Logout") { href = req.Url.WithPathOnly("/logout").ToHref() }, " | ",
-                                        new A("Change password") { href = req.Url.WithPathOnly("/changepassword").WithQuery("returnto", req.Url.ToHref()).ToHref() }
+                                        new A("Logout") { href = req.Url.WithPathOnly("/auth/logout").ToHref() }, " | ",
+                                        new A("Change password") { href = req.Url.WithPathOnly("/auth/changepassword").WithQuery("returnto", req.Url.ToHref()).ToHref() }
                                     )
                                 ),
                                 new TD { class_ = "content" }._(content)
@@ -476,7 +479,7 @@ namespace RT.DocGen
             }
         }
 
-        private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces = false, bool includeOuterTypes = false, bool variance = false, string baseUrl = null, bool inclRef = false, bool span = false)
+        private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces = false, bool includeOuterTypes = false, bool variance = false, string baseUrl = null, bool inclRef = false, bool span = false, bool modifiers = false)
         {
             if (span)
             {
@@ -535,6 +538,15 @@ namespace RT.DocGen
                     else if (t.GenericParameterAttributes.HasFlag(GenericParameterAttributes.Covariant))
                         yield return "out ";
                 }
+                if (modifiers)
+                {
+                    if (t.IsAbstract && t.IsSealed)
+                        yield return "static ";
+                    else if (t.IsAbstract)
+                        yield return "abstract ";
+                    else if (t.IsSealed)
+                        yield return "sealed ";
+                }
                 if (includeOuterTypes && t.IsNested && !t.IsGenericParameter)
                 {
                     yield return friendlyTypeName(t.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: span);
@@ -572,15 +584,15 @@ namespace RT.DocGen
             }
         }
 
-        private object friendlyMemberName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool namespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool stringOnly = false)
+        private object friendlyMemberName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool namespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool stringOnly = false, bool modifiers = false)
         {
             if (m.MemberType == MemberTypes.NestedType)
-                return friendlyTypeName((Type) m, includeNamespaces: namespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: !stringOnly);
+                return friendlyTypeName((Type) m, includeNamespaces: namespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: !stringOnly, modifiers: modifiers);
 
             if (m.MemberType == MemberTypes.Constructor || m.MemberType == MemberTypes.Method)
             {
-                var f = friendlyMethodName(m, returnType, containingType, parameterTypes, parameterNames, parameterDefaultValues, omitGenericTypeParameters, namespaces, variance, indent, url, baseUrl, stringOnly: stringOnly);
-                return stringOnly ? (object) f : new SPAN { class_ = m.MemberType.ToString(), title = stringSoup(friendlyMemberName(m, true, true, true, true, true, stringOnly: true)) }._(f);
+                var f = friendlyMethodName((MethodBase) m, returnType, containingType, parameterTypes, parameterNames, parameterDefaultValues, omitGenericTypeParameters, namespaces, variance, indent, url, baseUrl, stringOnly: stringOnly, modifiers: modifiers);
+                return stringOnly ? (object) f : new SPAN { class_ = m.MemberType.ToString(), title = stringSoup(friendlyMemberName(m, true, true, true, true, true, stringOnly: true, modifiers: true)) }._(f);
             }
 
             var arr = new object[] {
@@ -591,16 +603,33 @@ namespace RT.DocGen
                 containingType ? "." : null,
                 m.MemberType == MemberTypes.Property
                     ? (object) friendlyPropertyName((PropertyInfo) m, parameterTypes, parameterNames, namespaces, indent, url, baseUrl, stringOnly)
-                    : stringOnly ? (object) m.Name : new STRONG(url == null ? (object) m.Name : new A(m.Name) { href = url })
+                    : stringOnly ? (object) m.Name : new STRONG(url == null ? (object) m.Name : new A { href = url }._(m.Name))
             };
             return stringOnly ? (object) stringSoup(arr) : new SPAN(arr) { class_ = m.MemberType.ToString(), title = stringSoup(friendlyMemberName(m, true, true, true, true, true, stringOnly: true)) };
         }
 
-        private IEnumerable<object> friendlyMethodName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool includeNamespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool isDelegate = false, bool stringOnly = false)
+        private IEnumerable<object> friendlyMethodName(MethodBase m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool includeNamespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool isDelegate = false, bool stringOnly = false, bool modifiers = false)
         {
-            MethodBase mi = m as MethodBase;
             if (isDelegate)
                 yield return "delegate ";
+            if (modifiers)
+            {
+                if (m.IsStatic)
+                    yield return "static ";
+                if (m.IsVirtual)
+                {
+                    if (m.IsAbstract)
+                        yield return "abstract ";
+                    else if (m is MethodInfo && ((MethodInfo) m).GetBaseDefinition() != m)
+                    {
+                        if (m.IsFinal)
+                            yield return "sealed ";
+                        yield return "override ";
+                    }
+                    else if (!m.IsFinal)
+                        yield return "virtual ";
+                }
+            }
             if (returnType && m.MemberType != MemberTypes.Constructor)
             {
                 var meth = (MethodInfo) m;
@@ -612,14 +641,14 @@ namespace RT.DocGen
                 }
             }
             if ((m.MemberType == MemberTypes.Constructor || isDelegate) && url != null)
-                yield return stringOnly ? (object) friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: false) : new STRONG(new A(friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: true)) { href = url });
+                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: false) : new STRONG(new A { href = url }._(friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: true)));
             else if (isDelegate)
-                yield return stringOnly ? (object) friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance) : new STRONG(friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: true));
+                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance) : new STRONG(friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: true));
             else if (containingType)
-                yield return friendlyTypeName(mi.DeclaringType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly);
+                yield return friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly);
             else if (m.MemberType == MemberTypes.Constructor)
-                yield return stringOnly ? (object) friendlyTypeName(mi.DeclaringType, includeNamespaces) : new STRONG(friendlyTypeName(mi.DeclaringType, includeNamespaces, baseUrl: baseUrl, span: true));
-            if (!stringOnly && !indent && (mi.IsGenericMethod || (parameterNames && mi.GetParameters().Any()))) yield return new WBR();
+                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces) : new STRONG(friendlyTypeName(m.DeclaringType, includeNamespaces, baseUrl: baseUrl, span: true));
+            if (!stringOnly && !indent && (m.IsGenericMethod || (parameterNames && m.GetParameters().Any()))) yield return new WBR();
             if (m.MemberType != MemberTypes.Constructor && !isDelegate)
             {
                 if (containingType) yield return ".";
@@ -628,17 +657,17 @@ namespace RT.DocGen
                 if (!stringOnly) f = new STRONG(f);
                 yield return f;
             }
-            if (mi.IsGenericMethod)
+            if (m.IsGenericMethod)
             {
                 if (!stringOnly && !indent) yield return new WBR();
-                yield return omitGenericTypeParameters ? "<>" : "<" + mi.GetGenericArguments().Select(ga => ga.Name).JoinString(", ") + ">";
+                yield return omitGenericTypeParameters ? "<>" : "<" + m.GetGenericArguments().Select(ga => ga.Name).JoinString(", ") + ">";
             }
             if (parameterTypes || parameterNames)
             {
-                yield return indent && mi.GetParameters().Any() ? "(\n    " : "(";
-                if (!stringOnly && !indent && mi.GetParameters().Any()) yield return new WBR();
+                yield return indent && m.GetParameters().Any() ? "(\n    " : "(";
+                if (!stringOnly && !indent && m.GetParameters().Any()) yield return new WBR();
                 bool first = true;
-                foreach (var p in mi.GetParameters())
+                foreach (var p in m.GetParameters())
                 {
                     if (!first) yield return indent ? ",\n    " : ", ";
                     first = false;
@@ -652,7 +681,7 @@ namespace RT.DocGen
                     );
                     yield return stringOnly ? (object) stringSoup(f) : new SPAN { class_ = "parameter" }._(f);
                 }
-                yield return indent && mi.GetParameters().Any() ? "\n)" : ")";
+                yield return indent && m.GetParameters().Any() ? "\n)" : ")";
             }
         }
 
@@ -737,12 +766,13 @@ namespace RT.DocGen
                 {
                     if (!first) yield return indent ? ",\n    " : ", ";
                     first = false;
-                    yield return new SPAN { class_ = "parameter" }._(
+                    var arr = Ut.NewArray<object>(
                         parameterTypes && p.IsOut ? "out " : null,
                         parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: !p.IsOut, span: !stringOnly) : null,
                         parameterTypes && parameterNames ? " " : null,
                         parameterNames ? (stringOnly ? (object) p.Name : new STRONG(p.Name)) : null
                     );
+                    yield return stringOnly ? (object) arr : new SPAN { class_ = "parameter" }._(arr);
                 }
                 yield return indent ? "\n]" : "]";
             }
@@ -761,13 +791,17 @@ namespace RT.DocGen
             if (m.MemberType == MemberTypes.Method)
                 return !(m as MethodInfo).IsPrivate && !isPropertyGetterOrSetter(m) && !isEventAdderOrRemover(m);
             if (m.MemberType == MemberTypes.Event)
-                return true;
+                return ((m as EventInfo).GetAddMethod() != null && !(m as EventInfo).GetAddMethod().IsPrivate) ||
+                    ((m as EventInfo).GetRemoveMethod() != null && !(m as EventInfo).GetRemoveMethod().IsPrivate);
+            if (m.MemberType == MemberTypes.Property)
+                return ((m as PropertyInfo).GetGetMethod() != null && !(m as PropertyInfo).GetGetMethod().IsPrivate) ||
+                    ((m as PropertyInfo).GetSetMethod() != null && !(m as PropertyInfo).GetSetMethod().IsPrivate);
             if (m.MemberType == MemberTypes.Field)
                 return !(m as FieldInfo).IsPrivate && !isEventField(m);
             if (m.MemberType == MemberTypes.NestedType)
                 return shouldTypeBeDisplayed((Type) m);
 
-            return true;
+            return false;
         }
 
         private bool shouldTypeBeDisplayed(Type t)
@@ -782,28 +816,34 @@ namespace RT.DocGen
             {
                 MethodBase mi = m as MethodBase;
                 sb.Append("M:");
-                sb.Append(mi.DeclaringType.FullName.Replace("+", "."));
+                var declaringType = mi.DeclaringType;
+                if (declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition)
+                    declaringType = declaringType.GetGenericTypeDefinition();
+                sb.Append(declaringType.FullName.Replace("+", "."));
                 sb.Append(m.MemberType == MemberTypes.Method ? "." + mi.Name : ".#ctor");
                 if (mi.IsGenericMethod)
                 {
                     sb.Append("``");
                     sb.Append(mi.GetGenericArguments().Count());
                 }
-                bool first = true;
-                foreach (var p in mi.GetParameters())
-                {
-                    sb.Append(first ? "(" : ",");
-                    first = false;
-                    sb.Append(stringifyParameterType(p.ParameterType, mi, m.ReflectedType));
-                }
-                if (!first) sb.Append(")");
+                appendParameterTypes(sb, mi.GetParameters(), mi.ReflectedType, mi as MethodInfo);
             }
-            else if (m.MemberType == MemberTypes.Field || m.MemberType == MemberTypes.Property || m.MemberType == MemberTypes.Event)
+            else if (m.MemberType == MemberTypes.Field || m.MemberType == MemberTypes.Event)
             {
-                sb.Append(m.MemberType == MemberTypes.Field ? "F:" : m.MemberType == MemberTypes.Property ? "P:" : "E:");
+                sb.Append(m.MemberType == MemberTypes.Field ? "F:" : "E:");
                 sb.Append(m.DeclaringType.FullName.Replace("+", "."));
                 sb.Append(".");
                 sb.Append(m.Name);
+            }
+            else if (m.MemberType == MemberTypes.Property)
+            {
+                var prop = (PropertyInfo) m;
+                sb.Append("P:");
+                sb.Append(prop.DeclaringType.FullName.Replace("+", "."));
+                sb.Append(".");
+                sb.Append(prop.Name);
+                if (m.MemberType == MemberTypes.Property && prop.GetIndexParameters().Length > 0)
+                    appendParameterTypes(sb, prop.GetIndexParameters(), prop.ReflectedType);
             }
             else if (m.MemberType == MemberTypes.NestedType)
             {
@@ -819,18 +859,30 @@ namespace RT.DocGen
             if (m is MethodInfo && (m.Name == "op_Implicit" || m.Name == "op_Explicit"))
             {
                 var b = (MethodInfo) m;
-                sb.Append("~" + stringifyParameterType(b.ReturnType, b, b.ReflectedType));
+                sb.Append("~" + stringifyParameterType(b.ReturnType, b.ReflectedType, b));
             }
             return sb.ToString();
         }
 
-        private string stringifyParameterType(Type parameterType, MethodBase method, Type type)
+        private void appendParameterTypes(StringBuilder sb, ParameterInfo[] parameters, Type type, MethodInfo method = null)
+        {
+            bool first = true;
+            foreach (var param in parameters)
+            {
+                sb.Append(first ? "(" : ",");
+                first = false;
+                sb.Append(stringifyParameterType(param.ParameterType, type, method));
+            }
+            if (!first) sb.Append(")");
+        }
+
+        private string stringifyParameterType(Type parameterType, Type type, MethodInfo method)
         {
             if (parameterType.IsByRef)
-                return stringifyParameterType(parameterType.GetElementType(), method, type) + "@";
+                return stringifyParameterType(parameterType.GetElementType(), type, method) + "@";
 
             if (parameterType.IsArray)
-                return stringifyParameterType(parameterType.GetElementType(), method, type) + "[]";
+                return stringifyParameterType(parameterType.GetElementType(), type, method) + "[]";
 
             if (!parameterType.IsGenericType && !parameterType.IsGenericParameter)
                 return parameterType.FullName.Replace("+", ".");
@@ -838,7 +890,7 @@ namespace RT.DocGen
             if (parameterType.IsGenericParameter)
             {
                 int i = 0;
-                if (method.IsGenericMethodDefinition)
+                if (method != null && method.IsGenericMethodDefinition)
                 {
                     foreach (var p in method.GetGenericArguments())
                     {
@@ -857,7 +909,7 @@ namespace RT.DocGen
                         i++;
                     }
                 }
-                throw new Exception("Parameter type is a generic type, but its generic argument is neither in the class nor method/constructor definition.");
+                throw new Exception("Parameter type is a generic type, but its generic argument is neither in the class nor method definition.");
             }
 
             if (parameterType.IsGenericType)
@@ -869,7 +921,7 @@ namespace RT.DocGen
                 while ((m = Regex.Match(fullName, @"`(\d+)")).Success)
                 {
                     int num = int.Parse(m.Groups[1].Value);
-                    constructName += fullName.Substring(0, m.Index) + "{" + genericArguments.Take(num).Select(g => stringifyParameterType(g, method, type)).JoinString(",") + "}";
+                    constructName += fullName.Substring(0, m.Index) + "{" + genericArguments.Take(num).Select(g => stringifyParameterType(g, type, method)).JoinString(",") + "}";
                     fullName = fullName.Substring(m.Index + m.Length);
                     genericArguments = genericArguments.Skip(num);
                 }
@@ -1008,9 +1060,12 @@ namespace RT.DocGen
                 member.MemberType == MemberTypes.Property ? (isStatic ? "Static property: " : "Property: ") : "Member: ",
                 friendlyMemberName(member, returnType: true, parameterTypes: true)
             );
-            yield return new UL(new LI("Declared in: ", friendlyTypeName(member.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true)));
+            yield return new UL(
+                new LI("Declared in: ", friendlyTypeName(member.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true)),
+                formatMemberExtraInfoItems(req, member, true)
+            );
             yield return new H2("Declaration");
-            yield return new PRE((isStatic ? "static " : null), friendlyMemberName(member, returnType: true, parameterTypes: true, parameterNames: true, parameterDefaultValues: true, variance: true, indent: true, baseUrl: req.Url.WithPathOnly("").ToHref()));
+            yield return new PRE(friendlyMemberName(member, returnType: true, parameterTypes: true, parameterNames: true, parameterDefaultValues: true, variance: true, indent: true, modifiers: true, baseUrl: req.Url.WithPathOnly("").ToHref()));
 
             if (document != null)
             {
@@ -1075,7 +1130,7 @@ namespace RT.DocGen
             }
 
             if (member.MemberType == MemberTypes.Method && ((MethodBase) member).IsGenericMethod)
-                yield return generateGenericTypeParameterTable(((MethodBase) member).GetGenericArguments(), document, req);
+                yield return generateGenericTypeParameterTable(req, document, ((MethodBase) member).GetGenericArguments());
         }
 
         private IEnumerable<object> generateTypeDocumentation(Type type, XElement document, HttpRequest req)
@@ -1150,7 +1205,7 @@ namespace RT.DocGen
                     var args = type.GetGenericArguments();
                     if (type.DeclaringType != null && type.DeclaringType.IsGenericType)
                         args = args.Skip(type.DeclaringType.GetGenericArguments().Length).ToArray();
-                    yield return generateGenericTypeParameterTable(args, document, req);
+                    yield return generateGenericTypeParameterTable(req, document, args);
                 }
 
                 var remarks = document.Element("remarks");
@@ -1186,7 +1241,10 @@ namespace RT.DocGen
                     );
                     yield return new TABLE { class_ = "doclist" }._(
                         gr.Select(kvp => new TR(
-                            new TD { class_ = "item" }._(friendlyMemberName(kvp.Value.Member, returnType: true, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref())),
+                            new TD { class_ = "item" }._(
+                                friendlyMemberName(kvp.Value.Member, returnType: true, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref()),
+                                formatMemberExtraInfo(req, kvp.Value.Member, false)
+                            ),
                             new TD(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
                                 ? (object) new EM("This member is not documented.")
                                 : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req))
@@ -1194,6 +1252,154 @@ namespace RT.DocGen
                     );
                 }
             }
+        }
+
+        private IEnumerable<object> formatMemberExtraInfo(HttpRequest req, MemberInfo member, bool markInterfaceMethods)
+        {
+            var listItems = formatMemberExtraInfoItems(req, member, markInterfaceMethods).ToList();
+            if (listItems.Count > 0)
+                yield return new UL { class_ = "extra" }._(listItems);
+        }
+
+        private IEnumerable<object> formatMemberExtraInfoItems(HttpRequest req, MemberInfo member, bool markInterfaceMethods)
+        {
+            var method = member as MethodInfo;
+            if (method == null)
+            {
+                var prop = member as PropertyInfo;
+                if (prop != null)
+                    method = prop.GetGetMethod() ?? prop.GetSetMethod();
+                else
+                {
+                    var evnt = member as EventInfo;
+                    if (evnt != null)
+                    {
+                        method = evnt.GetAddMethod() ?? evnt.GetRemoveMethod();
+                        if (method == null)
+                            yield break;
+                    }
+                    else
+                        yield break;
+                }
+            }
+
+            MemberInfo baseDefinition = method.GetBaseDefinition();
+            var basePropOrEvent = baseDefinition == null ? null :
+                (MemberInfo) method.DeclaringType.GetProperties().FirstOrDefault(p => p.GetGetMethod() == baseDefinition || p.GetSetMethod() == baseDefinition) ??
+                (MemberInfo) method.DeclaringType.GetEvents().FirstOrDefault(e => e.GetAddMethod() == baseDefinition || e.GetRemoveMethod() == baseDefinition);
+            if (basePropOrEvent != null)
+                baseDefinition = basePropOrEvent;
+            if (method.DeclaringType.IsInterface)
+                yield return new LI(member is MethodInfo ? "Interface method." : member is PropertyInfo ? "Interface property." : "Interface event.");
+            else if (method.IsAbstract)
+                yield return new LI("Abstract.");
+            else if (baseDefinition != member)
+            {
+                string url = null, baseUrl = req.Url.WithPathOnly("").ToHref();
+                var dcmn = documentationCompatibleMemberName(baseDefinition);
+                if (_members.ContainsKey(dcmn))
+                    url = req.Url.WithPathOnly("/" + dcmn.UrlEscape()).ToHref();
+                yield return new LI(new object[] { "Overrides: ", friendlyMemberName(baseDefinition, containingType: true, parameterTypes: true, url: url, baseUrl: baseUrl), "." });
+                if (method.IsFinal)
+                    yield return new LI("Sealed.");
+            }
+            else
+            {
+                foreach (var interf in method.ReflectedType.GetInterfaces())
+                {
+                    var map = method.ReflectedType.GetInterfaceMap(interf);
+                    var index = map.TargetMethods.IndexOf(method);
+                    if (index != -1)
+                    {
+                        string url = null, baseUrl = baseUrl = req.Url.WithPathOnly("").ToHref();
+                        var interfaceMember =
+                            (MemberInfo) interf.GetProperties().FirstOrDefault(p => p.GetGetMethod() == map.InterfaceMethods[index] || p.GetSetMethod() == map.InterfaceMethods[index]) ??
+                            (MemberInfo) interf.GetEvents().FirstOrDefault(e => e.GetAddMethod() == map.InterfaceMethods[index] || e.GetRemoveMethod() == map.InterfaceMethods[index]) ??
+                            map.InterfaceMethods[index];
+                        var interfaceMemberDefinition = findInterfaceMemberDefinition(interfaceMember);
+                        var dcmn = documentationCompatibleMemberName(interfaceMemberDefinition);
+                        if (_members.ContainsKey(dcmn))
+                            url = req.Url.WithPathOnly("/" + dcmn.UrlEscape()).ToHref();
+                        yield return new LI("Implements ", friendlyMemberName(interfaceMember, containingType: true, parameterTypes: true, url: url, baseUrl: baseUrl), ".");
+                    }
+                }
+                if (method.IsVirtual && !method.IsFinal)
+                    yield return new LI("Virtual.");
+            }
+        }
+
+        private MemberInfo findInterfaceMemberDefinition(MemberInfo member)
+        {
+            var method = member as MethodInfo;
+            if (method != null)
+            {
+                if (method.IsGenericMethod && !method.IsGenericMethodDefinition)
+                    return findInterfaceMemberDefinition(method.GetGenericMethodDefinition());
+                if (!method.DeclaringType.IsGenericType || method.DeclaringType.IsGenericTypeDefinition)
+                    return method;
+                var def = method.DeclaringType.GetGenericTypeDefinition();
+                return def.GetMethods((method.IsPublic ? BindingFlags.Public : BindingFlags.NonPublic) | (method.IsStatic ? BindingFlags.Static : BindingFlags.Instance))
+                    .FirstOrDefault(m => sameExcept(m, method, def.GetGenericArguments(), method.DeclaringType.GetGenericArguments()));
+            }
+            var prop = member as PropertyInfo;
+            if (prop != null)
+                return member.DeclaringType.GetGenericTypeDefinition().GetProperties().FirstOrDefault(p => p.Name == prop.Name);
+            var evnt = member as EventInfo;
+            Ut.Assert(evnt != null);
+            return member.DeclaringType.GetGenericTypeDefinition().GetEvents().FirstOrDefault(e => e.Name == evnt.Name);
+        }
+
+        private bool sameExcept(MethodInfo m1, MethodInfo m2, Type[] genericTypeParameters, Type[] genericTypeArguments)
+        {
+            if (m1.Name != m2.Name)
+                return false;
+            var p1 = m1.GetParameters();
+            var p2 = m2.GetParameters();
+            if (p1.Length != p2.Length)
+                return false;
+            for (int i = 0; i < p1.Length; i++)
+                if (!sameExcept(p1[i].ParameterType, p2[i].ParameterType, genericTypeParameters, genericTypeArguments))
+                    return false;
+            return true;
+        }
+
+        private bool sameExcept(Type t1, Type t2, Type[] genericTypeParameters, Type[] genericTypeArguments)
+        {
+            if (t1 == t2)
+                return true;
+            if (t1.IsGenericParameter)
+            {
+                var index = genericTypeParameters.IndexOf(t1);
+                if (index != -1 && genericTypeArguments[index] == t2)
+                    return true;
+            }
+
+            if (t1.IsArray != t2.IsArray)
+                return false;
+            if (t1.IsArray)
+                return sameExcept(t1.GetElementType(), t2.GetElementType(), genericTypeParameters, genericTypeArguments);
+
+            if (t1.IsByRef != t2.IsByRef)
+                return false;
+            if (t1.IsByRef)
+                return sameExcept(t1.GetElementType(), t2.GetElementType(), genericTypeParameters, genericTypeArguments);
+
+            if (t1.IsPointer != t2.IsPointer)
+                return false;
+            if (t1.IsPointer)
+                return sameExcept(t1.GetElementType(), t2.GetElementType(), genericTypeParameters, genericTypeArguments);
+
+            if (!t1.IsGenericType || !t2.IsGenericType)
+                return false;
+            if (t1.GetGenericTypeDefinition() != t2.GetGenericTypeDefinition())
+                return false;
+            var parms = t1.GetGenericArguments();
+            var args = t2.GetGenericArguments();
+            Ut.Assert(parms.Length == args.Length);
+            for (int i = 0; i < parms.Length; i++)
+                if (!sameExcept(parms[i], args[i], genericTypeParameters, genericTypeArguments))
+                    return false;
+            return true;
         }
 
         private LI inheritsFrom(Type type, HttpRequest req)
@@ -1262,7 +1468,7 @@ namespace RT.DocGen
             );
         }
 
-        private IEnumerable<object> generateGenericTypeParameterTable(Type[] genericTypeArguments, XElement document, HttpRequest req)
+        private IEnumerable<object> generateGenericTypeParameterTable(HttpRequest req, XElement document, Type[] genericTypeArguments)
         {
             if (!genericTypeArguments.Any())
                 yield break;
@@ -1274,21 +1480,30 @@ namespace RT.DocGen
                     var docElem = document == null ? null : document.Elements("typeparam")
                         .Where(xe => xe.Attribute("name") != null && xe.Attribute("name").Value == gta.Name).FirstOrDefault();
                     return new TR(
-                        new TD { class_ = "item" }._(new STRONG(gta.Name)),
-                        new TD(
-                            docElem == null ? (object) new EM("This type parameter is not documented.") : interpretNodes(docElem.Nodes(), req),
-                            constraints == null || constraints.Length == 0 ? null :
-                            constraints.Length > 0 ? new object[] { new BR(), new EM("Must be derived from:"), " ",
-                                constraints.Select(c => friendlyTypeName(c, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true)).InsertBetween<object>(", ") } : null,
-                            gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.DefaultConstructorConstraint) ? new object[] { new BR(), new EM("Must have a default constructor.") } : null,
-                            gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint) ? new object[] { new BR(), new EM("Must be a non-nullable value type.") } : null,
-                            gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint) ? new object[] { new BR(), new EM("Must be a reference type.") } : null,
-                            gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.Covariant) ? new object[] { new BR(), new EM("Covariant.") } : null,
-                            gta.GenericParameterAttributes.HasFlag(GenericParameterAttributes.Contravariant) ? new object[] { new BR(), new EM("Contravariant.") } : null
-                        )
+                        new TD { class_ = "item" }._(new STRONG(gta.Name), formatGenericConstraints(req, constraints, gta.GenericParameterAttributes)),
+                        new TD(docElem == null ? (object) new EM("This type parameter is not documented.") : interpretNodes(docElem.Nodes(), req))
                     );
                 })
             );
+        }
+
+        private IEnumerable<object> formatGenericConstraints(HttpRequest req, Type[] constraints, GenericParameterAttributes genericParameterAttributes)
+        {
+            var infos = new List<object>();
+            if (constraints != null && constraints.Length > 0)
+                infos.Add(new object[] { "Must derive from: ", constraints.Select(c => friendlyTypeName(c, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true)).InsertBetween<object>(", "), "." });
+            if (genericParameterAttributes.HasFlag(GenericParameterAttributes.DefaultConstructorConstraint))
+                infos.Add("Must have a default constructor.");
+            if (genericParameterAttributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint))
+                infos.Add("Must be a non-nullable value type.");
+            if (genericParameterAttributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint))
+                infos.Add("Must be a reference type.");
+            if (genericParameterAttributes.HasFlag(GenericParameterAttributes.Covariant))
+                infos.Add("Covariant.");
+            if (genericParameterAttributes.HasFlag(GenericParameterAttributes.Contravariant))
+                infos.Add("Contravariant.");
+            if (infos.Count > 0)
+                yield return new UL { class_ = "extra" }._(infos.Select(inf => new LI(inf)));
         }
 
         private object interpretNodes(IEnumerable<XNode> nodes, HttpRequest req)
