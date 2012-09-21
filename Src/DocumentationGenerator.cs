@@ -418,8 +418,8 @@ namespace RT.DocGen
         {
             return generateAll(
                 _types,
-                k => typeof(Delegate).IsAssignableFrom(k.Value.Type) ? 4 : k.Value.Type.IsInterface ? 3 : k.Value.Type.IsEnum ? 2 : k.Value.Type.IsValueType ? 1 : 0,
-                new string[] { "Classes", "Structs", "Enums", "Interfaces", "Delegates" },
+                k => typeof(Delegate).IsAssignableFrom(k.Value.Type) ? 5 : k.Value.Type.IsInterface ? 4 : k.Value.Type.IsEnum ? 3 : k.Value.Type.IsValueType ? 2 : (k.Value.Type.IsAbstract && k.Value.Type.IsSealed) ? 0 : 1,
+                new string[] { "Static classes", "Classes", "Structs", "Enums", "Interfaces", "Delegates" },
                 "No types are defined.",
                 k => stringSoup(friendlyTypeName(k.Value.Type)),
                 k => friendlyTypeName(k.Value.Type, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true, modifiers: true, variance: true)
@@ -1275,7 +1275,10 @@ namespace RT.DocGen
             if (basePropOrEvent != null)
                 baseDefinition = basePropOrEvent;
             if (method.DeclaringType.IsInterface)
-                yield return new LI(member is MethodInfo ? "Interface method." : member is PropertyInfo ? "Interface property." : "Interface event.");
+            {
+                if (markInterfaceMethods)
+                    yield return new LI(member is MethodInfo ? "Interface method." : member is PropertyInfo ? "Interface property." : "Interface event.");
+            }
             else if (method.IsAbstract)
                 yield return new LI("Abstract.");
             else if (baseDefinition != member)
