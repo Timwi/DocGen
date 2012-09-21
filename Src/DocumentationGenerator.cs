@@ -142,8 +142,8 @@ namespace RT.DocGen
             table.usertable td { padding: 0.2em 0.8em; }
             td p:first-child { margin-top: 0; }
             td p:last-child { margin-bottom: 0; }
-            span.parameter, span.member { white-space: nowrap; }
-            h1 span.parameter, h1 span.member { white-space: normal; }
+            span.parameter, span.typeparameter, span.member { white-space: nowrap; }
+            h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; }
             pre { background: #eee; border: 1px solid #ccc; padding: 1em 2em; }
         ";
 
@@ -1331,7 +1331,9 @@ namespace RT.DocGen
             else if (elem.Name == "c")
                 yield return new CODE(interpretNodes(elem.Nodes(), req));
             else if (elem.Name == "paramref" && elem.Attribute("name") != null)
-                yield return new SPAN(new EM(elem.Attribute("name").Value)) { class_ = "parameter" };
+                yield return new SPAN { class_ = "parameter" }._(new EM(elem.Attribute("name").Value));
+            else if (elem.Name == "typeparamref" && elem.Attribute("name") != null)
+                yield return new SPAN { class_ = "parameter" }._(new EM(elem.Attribute("name").Value));
             else
             {
                 yield return @"[Unrecognised tag: ""{0}""]".Fmt(elem.Name);
@@ -1348,8 +1350,10 @@ namespace RT.DocGen
                 return friendlyMemberName(_members[token].Member, parameterTypes: true, namespaces: includeNamespaces, url: req.Url.WithPathOnly("/" + token.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref());
             else if (token.StartsWith("T:") && (actual = Type.GetType(token.Substring(2), false, true)) != null)
                 return new SPAN(foreignTypeName(actual, includeNamespaces)) { class_ = "type", title = actual.FullName };
+            else if (token.StartsWith("T:"))
+                return new SPAN { class_ = "type", title = token.Substring(2) }._(foreignTypeName(token.Substring(2), includeNamespaces));
             else
-                return new SPAN(token.Substring(2)) { class_ = "type" };
+                return new SPAN { class_ = "type" }._(token.Substring(2));
         }
 
         private IEnumerable<object> foreignTypeName(Type type, bool includeNamespaces)
@@ -1369,6 +1373,41 @@ namespace RT.DocGen
                     yield return ", ";
                     yield return gen.Name;
                 }
+                yield return ">";
+            }
+        }
+
+        private IEnumerable<object> foreignTypeName(string type, bool includeNamespaces)
+        {
+            var numGenerics = 0;
+
+            var genericsPos = type.LastIndexOf('`');
+            if (genericsPos != -1)
+            {
+                numGenerics = Convert.ToInt32(type.Substring(genericsPos + 1));
+                type = type.Substring(0, genericsPos);
+            }
+
+            var namespacePos = type.LastIndexOf('.');
+            string namesp = null;
+            if (namespacePos != -1)
+            {
+                namesp = type.Substring(0, namespacePos);
+                type = type.Substring(namespacePos + 1);
+            }
+
+            if (namesp != null && includeNamespaces)
+            {
+                yield return namesp;
+                yield return ".";
+            }
+
+            yield return new STRONG(type);
+
+            if (numGenerics > 0)
+            {
+                yield return "<";
+                yield return Enumerable.Range(1, numGenerics).Select(i => "T" + i).JoinString(", ");
                 yield return ">";
             }
         }
