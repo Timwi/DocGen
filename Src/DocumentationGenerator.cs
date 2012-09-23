@@ -91,6 +91,7 @@ namespace RT.DocGen
 
         private static string _css = @"
             body, pre { font-family: ""Segoe UI"", ""Verdana"", sans-serif; font-size: 11pt; margin: .5em; }
+            body { margin-bottom: 10em; }
             .namespace { font-weight: normal; color: #888; }
             a.namespace { color: #00e; }
             a.namespace:visited { color: #551a8b; }
@@ -1224,19 +1225,37 @@ namespace RT.DocGen
                         gr.Key.MemberType == MemberTypes.Property ? "Instance properties" :
                         gr.Key.MemberType == MemberTypes.NestedType ? "Nested types" : "Additional members"
                     );
-                    yield return new TABLE { class_ = "doclist" }._(
-                        gr.Select(kvp => new TR(
-                            new TD { class_ = "item" }._(
-                                friendlyMemberName(kvp.Value.Member, returnType: true, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref()),
-                                formatMemberExtraInfo(req, kvp.Value.Member, false)
-                            ),
-                            new TD(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
-                                ? (object) new EM("This member is not documented.")
-                                : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req))
-                        ))
-                    );
+
+                    yield return new TABLE { class_ = "doclist" }._(Ut.Lambda(() =>
+                    {
+                        // Group members with the same documentation
+                        return gr.GroupConsecutive((k1, k2) => sameSummary(k1.Value.Documentation, k2.Value.Documentation))
+                            .SelectMany(acc => acc.Select((kvp, i) => new TR(
+                                new TD { class_ = "item" }._(
+                                    friendlyMemberName(kvp.Value.Member, returnType: true, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref()),
+                                    formatMemberExtraInfo(req, kvp.Value.Member, false)
+                                ),
+                                i > 0 ? null : new TD { rowspan = acc.Count }._(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
+                                    ? (object) new EM("This member is not documented.")
+                                    : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req)
+                                )
+                            )));
+                    }));
                 }
             }
+        }
+
+        private bool sameSummary(XElement doc1, XElement doc2)
+        {
+            if (doc1 == null)
+                return doc2 == null;
+            else if (doc2 == null)
+                return false;
+            if (doc1.Element("summary") == null)
+                return doc2.Element("summary") == null;
+            else if (doc2.Element("summary") == null)
+                return false;
+            return XNode.DeepEquals(doc1.Element("summary"), doc2.Element("summary"));
         }
 
         private IEnumerable<object> formatMemberExtraInfo(HttpRequest req, MemberInfo member, bool markInterfaceMethods)
