@@ -47,18 +47,8 @@
     <Error Condition="'$(DeployToDocGenPath)'==''" Text="DeployToDocGenPath must be specified"/>
     <MakeDir Directories="$(DeployToDocGenPath)"/>       <!-- a bit of hard-coding below to make this script a lot simpler... -->
     <ItemGroup>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.Util.dll"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.Util.docs.xml"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.KitchenSink.dll"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.KitchenSink.docs.xml"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.PropellerApi.dll"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.PropellerApi.docs.xml"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.Servers.dll"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.Servers.docs.xml"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.Services.dll"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.Services.docs.xml"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.SqlChain.dll"/>
-      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\RT.SqlChain.docs.xml"/>
+      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\*.dll"/>
+      <BuildOutputs Include="$(BuildsPath)\$(ProjectName)\Debug-AnyCPU-Raw\*.docs.xml"/>
     </ItemGroup>
     <Copy SourceFiles="@(BuildOutputs)" DestinationFolder="$(DeployToDocGenPath)"/>
   </Target>
