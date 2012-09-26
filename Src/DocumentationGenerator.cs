@@ -1724,12 +1724,16 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                 return friendlyTypeName(_types[token].Type, includeNamespaces, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true);
             else if (_members.ContainsKey(token))
                 return friendlyMemberName(_members[token].Member, parameterTypes: true, namespaces: includeNamespaces, url: req.Url.WithPathOnly("/" + token.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref());
-            else if (token.StartsWith("T:") && (actual = Type.GetType(token.Substring(2), false, true)) != null)
-                return new SPAN(foreignTypeName(actual, includeNamespaces)) { class_ = "type", title = actual.FullName };
+            else if (token.StartsWith("T:") && (actual = Type.GetType(token.Substring(2), throwOnError: false, ignoreCase: true)) != null)
+                return new SPAN { title = actual.FullName }._(foreignTypeName(actual, includeNamespaces));
             else if (token.StartsWith("T:"))
-                return new SPAN { class_ = "type", title = token.Substring(2) }._(foreignTypeName(token.Substring(2), includeNamespaces));
+                return new SPAN { title = token.Substring(2) }._(foreignTypeName(token.Substring(2), includeNamespaces));
+            else if (token.StartsWith("M:") || token.StartsWith("P:") || token.StartsWith("E:") || token.StartsWith("F:"))
+                return CrefParser.Parse(token.Substring(2)).GetHtml(Assumption.Member,
+                    member => friendlyMemberName(member, containingType: true, parameterTypes: true),
+                    type => friendlyTypeName(type, includeOuterTypes: true, inclRef: true, span: true));
             else
-                return new SPAN { class_ = "type" }._(token.Substring(2));
+                return new SPAN { title = token.Substring(2) }._("[Unrecognized cref attribute]");
         }
 
         private IEnumerable<object> foreignTypeName(Type type, bool includeNamespaces)
