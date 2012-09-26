@@ -175,7 +175,8 @@ div.Field:before       { content: 'F'; background: #ee8; }
     font-variant: small-caps;
     text-align: center;
     margin: 0 -.7em;
-    background: #e0e8ff;
+    background: -moz-linear-gradient(#e8f0ff, #d0e0f8);
+    background: linear-gradient(#e8f0ff, #d0e0f8);
     border-radius: 5px;
 }
 
@@ -282,6 +283,11 @@ strong.sep {
 
 .highlighted {
     background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACDSURBVDhPzdPNDYAgDIZhNnEU3MRRcBJX0UlcRduEJv4V2g8OkpAeSJ5weBvCn09M69DlfwRN47ztNFMTKBBhB18YfEIwqEFusAaZQStUBb2QCqLQC+QguSN5QOctm4wuKKZ22AIXw0Zg06Z4YBMoy26BXaAFhsAS3AR+wV3AK0xgPAFi473SDF1CWAAAAABJRU5ErkJggg==) no-repeat right center;
+}
+
+.warning {
+    font-size: 14pt;
+    margin: 2em 2em;
 }
 
 span.parameter, span.typeparameter, span.member { white-space: nowrap; }
@@ -413,6 +419,7 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
             {
                 _resolver = new UrlPathResolver();
                 _resolver.Add(new UrlPathHook(path: "/css", specificPath: true, handler: req => HttpResponse.Create(_css, "text/css; charset=utf-8")));
+                _resolver.Add(new UrlPathHook(path: "/q", handler: quickUrl));
                 if (_usernamePasswordFile != null)
                     _resolver.Add(new UrlPathHook(path: "/auth", handler: req => Session.Enable<docGenSession>(req, session => _authenticator.Handle(req, session.Username, session.SetUsername))));
                 _resolver.Add(new UrlPathHook(handler: handle));
@@ -484,12 +491,12 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                 else if (req.Url.Path == "/")
                 {
                     title = null;
-                    content = new DIV("Select an item from the list on the left.") { class_ = "warning" };
+                    content = new object[] { new H1("Welcome"), new DIV { class_ = "warning" }._("Select an item from the list on the left.") };
                 }
                 else
                 {
                     title = "Not found";
-                    content = new DIV("This item is not documented.") { class_ = "warning" };
+                    content = new object[] { new H1("Not found"), new DIV { class_ = "warning" }._("This item is not documented.") };
                     status = HttpStatusCode._404_NotFound;
                 }
 
@@ -512,8 +519,8 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                                     ),
                                     new DIV { class_ = "boxy tree" }._(
                                         new UL(_namespaces.Select(nkvp => new LI(
-                                            new A { href = req.Url.WithPathOnly("/" + nkvp.Key.UrlEscape()).ToHref() }._(
-                                                new DIV { class_ = "namespace" + (nkvp.Key == ns && type == null ? " highlighted" : null) }._(nkvp.Key)
+                                            new DIV { class_ = "namespace" + (nkvp.Key == ns && type == null ? " highlighted" : null) }._(
+                                                new A { href = req.Url.WithPathOnly("/" + nkvp.Key.UrlEscape()).ToHref() }._(nkvp.Key)
                                             ),
                                             ns == null || ns != nkvp.Key ? null :
                                                 nkvp.Value.Types.Where(tkvp => !tkvp.Value.Type.IsNested).Select(tkvp => generateTypeBullet(tkvp.Key, member ?? type, req))
@@ -1123,7 +1130,7 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
             string cssClass = typeinfo.GetTypeCssClass();
             if (typeinfo.Documentation == null) cssClass += " missing";
             if (typeinfo.Type == selectedMember) cssClass += " highlighted";
-            return new DIV { class_ = "type indent" }._(new A { href = req.Url.WithPathOnly("/" + typeFullName.UrlEscape()).ToHref() }._(new DIV { class_ = cssClass }._(friendlyTypeName(typeinfo.Type, span: true))),
+            return new DIV { class_ = "type indent" }._(new DIV { class_ = cssClass }._(new A { href = req.Url.WithPathOnly("/" + typeFullName.UrlEscape()).ToHref() }._(friendlyTypeName(typeinfo.Type, span: true))),
                 selectedMember != null && !typeof(Delegate).IsAssignableFrom(typeinfo.Type) && isMemberInside(selectedMember, typeinfo.Type)
                     ? typeinfo.Members.Where(mkvp => isPublic(mkvp.Value.Member)).Select(mkvp =>
                     {
@@ -1132,7 +1139,7 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                         string css = mkvp.Value.Member.MemberType.ToString() + " member indent";
                         if (mkvp.Value.Documentation == null) css += " missing";
                         if (mkvp.Value.Member == selectedMember) css += " highlighted";
-                        return new A { href = req.Url.WithPathOnly("/" + mkvp.Key.UrlEscape()).ToHref() }._(new DIV { class_ = css }._(friendlyMemberName(mkvp.Value.Member, parameterNames: true, omitGenericTypeParameters: true)));
+                        return new DIV { class_ = css }._(new A { href = req.Url.WithPathOnly("/" + mkvp.Key.UrlEscape()).ToHref() }._(friendlyMemberName(mkvp.Value.Member, parameterNames: true, omitGenericTypeParameters: true)));
                     })
                     : null
             );
@@ -1848,6 +1855,43 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                     stringSoup(elem, sb);
             else
                 throw new InvalidOperationException(@"Encountered {0} where only strings are expected.".Fmt(obj.GetType().FullName));
+        }
+
+        public HttpResponse quickUrl(HttpRequest req)
+        {
+            var query = req.Url.Path.TrimStart('/');
+            if (query.Length > 0)
+            {
+                var result =
+                    quickUrlFinder(req, query, string.Equals) ??
+                    quickUrlFinder(req, query, StringExtensions.EqualsNoCase) ??
+                    quickUrlFinder(req, query, StringExtensions.ContainsNoCase);
+                if (result != null)
+                    return result;
+            }
+            return HttpResponse.Redirect(req.Url.WithPathParent().WithPath(""));
+        }
+
+        public HttpResponse quickUrlFinder(HttpRequest req, string query, Func<string, string, bool> matcher)
+        {
+            foreach (var inf in _members.Values)
+                if (matcher(inf.Member.Name, query))
+                    return HttpResponse.Redirect(req.Url.WithPathParent().WithPath("/" + documentationCompatibleMemberName(inf.Member).UrlEscape()).ToHref());
+            foreach (var inf in _types.Values)
+            {
+                var pos = inf.Type.Name.IndexOf('`');
+                var name = pos == -1 ? inf.Type.Name : inf.Type.Name.Substring(0, pos);
+                if (matcher(name, query))
+                    return HttpResponse.Redirect(req.Url.WithPathParent().WithPath("/" + getTypeFullName(inf.Type).UrlEscape()).ToHref());
+            }
+            foreach (var namesp in _namespaces.Keys)
+            {
+                var pos = namesp.LastIndexOf('.');
+                var name = pos == -1 ? namesp : namesp.Substring(pos + 1);
+                if (matcher(name, query))
+                    return HttpResponse.Redirect(req.Url.WithPathParent().WithPath("/" + namesp.UrlEscape()).ToHref());
+            }
+            return null;
         }
     }
 }
