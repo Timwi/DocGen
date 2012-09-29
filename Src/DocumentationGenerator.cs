@@ -1443,29 +1443,36 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
 
             MemberInfo baseDefinition = method.GetBaseDefinition();
             var basePropOrEvent = baseDefinition == null ? null :
-                (MemberInfo) method.DeclaringType.GetProperties().FirstOrDefault(p => p.GetGetMethod() == baseDefinition || p.GetSetMethod() == baseDefinition) ??
-                (MemberInfo) method.DeclaringType.GetEvents().FirstOrDefault(e => e.GetAddMethod() == baseDefinition || e.GetRemoveMethod() == baseDefinition);
+                (MemberInfo) baseDefinition.DeclaringType.GetProperties().FirstOrDefault(p => p.GetGetMethod() == baseDefinition || p.GetSetMethod() == baseDefinition) ??
+                (MemberInfo) baseDefinition.DeclaringType.GetEvents().FirstOrDefault(e => e.GetAddMethod() == baseDefinition || e.GetRemoveMethod() == baseDefinition);
             if (basePropOrEvent != null)
                 baseDefinition = basePropOrEvent;
             if (method.DeclaringType.IsInterface)
             {
                 if (markInterfaceMethods)
-                    yield return new LI(member is MethodInfo ? "Interface method." : member is PropertyInfo ? "Interface property." : "Interface event.");
+                    yield return new LI(member is MethodInfo ? "Interface method" : member is PropertyInfo ? "Interface property" : "Interface event");
             }
-            else if (method.IsAbstract)
-                yield return new LI("Abstract.");
-            else if (baseDefinition != member)
+            else if (method.IsVirtual)
             {
-                string url = null, baseUrl = req.Url.WithPathOnly("").ToHref();
-                var dcmn = documentationCompatibleMemberName(baseDefinition);
-                if (_members.ContainsKey(dcmn))
-                    url = req.Url.WithPathOnly("/" + dcmn.UrlEscape()).ToHref();
-                yield return new LI(new object[] { "Overrides: ", friendlyMemberName(baseDefinition, containingType: true, parameterTypes: true, url: url, baseUrl: baseUrl), "." });
-                if (method.IsFinal)
-                    yield return new LI("Sealed.");
-            }
-            else
-            {
+                bool showVirtual = true;
+                if (baseDefinition != member)
+                {
+                    string url = null, baseUrl = req.Url.WithPathOnly("").ToHref();
+                    var dcmn = documentationCompatibleMemberName(baseDefinition);
+                    if (_members.ContainsKey(dcmn))
+                        url = req.Url.WithPathOnly("/" + dcmn.UrlEscape()).ToHref();
+                    yield return new LI(new object[] { "Overrides: ", friendlyMemberName(baseDefinition, containingType: true, parameterTypes: true, url: url, baseUrl: baseUrl) });
+                    if (method.IsFinal)
+                        yield return new LI("Sealed");
+                    showVirtual = false;
+                }
+
+                if (method.IsAbstract)
+                {
+                    showVirtual = false;
+                    yield return new LI("Abstract");
+                }
+
                 foreach (var interf in method.ReflectedType.GetInterfaces())
                 {
                     var map = method.ReflectedType.GetInterfaceMap(interf);
@@ -1481,11 +1488,12 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                         var dcmn = documentationCompatibleMemberName(interfaceMemberDefinition);
                         if (_members.ContainsKey(dcmn))
                             url = req.Url.WithPathOnly("/" + dcmn.UrlEscape()).ToHref();
-                        yield return new LI("Implements ", friendlyMemberName(interfaceMember, containingType: true, parameterTypes: true, url: url, baseUrl: baseUrl), ".");
+                        yield return new LI("Implements: ", friendlyMemberName(interfaceMember, containingType: true, parameterTypes: true, url: url, baseUrl: baseUrl));
+                        showVirtual = showVirtual && !method.IsFinal;
                     }
                 }
-                if (method.IsVirtual && !method.IsFinal)
-                    yield return new LI("Virtual.");
+                if (showVirtual)
+                    yield return new LI("Virtual");
             }
         }
 
