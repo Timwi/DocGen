@@ -316,7 +316,7 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
 
         /// <summary>
         /// Initialises a <see cref="DocumentationGenerator"/> instance by searching the given paths for XML and DLL files.
-        /// All pairs of matching <c>*.dll</c> and <c>*.docs.xml</c> files are considered for documentation. The classes are extracted
+        /// All pairs of matching <c>*.dll</c> and <c>*.xml</c> files are considered for documentation. The classes are extracted
         /// from the DLLs and grouped by namespaces.
         /// </summary>
         /// <param name="paths">Paths containing DLL and XML files.</param>
@@ -349,12 +349,12 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                     return null;
                 };
 
-                foreach (var f in dllFiles.Where(f => File.Exists(f.FullName.Remove(f.FullName.Length - 3) + "docs.xml")))
+                foreach (var f in dllFiles.Where(f => File.Exists(f.FullName.Remove(f.FullName.Length - 3) + "xml")))
                 {
                     string loadFromFile = copyDllFilesTo != null ? Path.Combine(copyDllFilesTo, f.Name) : f.FullName;
                     try
                     {
-                        var docsFile = f.FullName.Remove(f.FullName.Length - 3) + "docs.xml";
+                        var docsFile = f.FullName.Remove(f.FullName.Length - 3) + "xml";
                         Assembly a = Assembly.LoadFile(loadFromFile);
                         XElement e = XElement.Load(docsFile);
 
