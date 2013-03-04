@@ -1214,6 +1214,17 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                     yield return new H2("Summary");
                     yield return interpretNodes(summary.Nodes(), req);
                 }
+            }
+
+            if (member.MemberType == MemberTypes.Constructor || member.MemberType == MemberTypes.Method)
+            {
+                var method = (MethodBase) member;
+                if (method.GetParameters().Any())
+                    yield return generateParameterDocumentation(req, method, documentation);
+            }
+
+            if (documentation != null)
+            {
                 var returns = documentation.Element("returns");
                 if (returns != null)
                 {
@@ -1243,13 +1254,6 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                     yield return new H2("See also");
                     yield return new UL(seealsos.Select(sa => new LI(interpretCref(sa.Attribute("cref").Value, req, true))));
                 }
-            }
-
-            if (member.MemberType == MemberTypes.Constructor || member.MemberType == MemberTypes.Method)
-            {
-                var method = (MethodBase) member;
-                if (method.GetParameters().Any())
-                    yield return generateParameterDocumentation(req, method, documentation);
             }
 
             if (member.MemberType == MemberTypes.Method && ((MethodBase) member).IsGenericMethod)
@@ -1343,10 +1347,14 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                     IsStatic = isStatic(kvp.Value.Member)
                 }))
                 {
+                    var isEnumValues = gr.Key.MemberType == MemberTypes.Field && gr.Key.IsStatic && type.IsEnum;
+
                     yield return new H2(
                         gr.Key.MemberType == MemberTypes.Constructor ? "Constructors" :
                         gr.Key.MemberType == MemberTypes.Event ? "Events" :
-                        gr.Key.MemberType == MemberTypes.Field ? "Fields" :
+                        isEnumValues ? "Enumeration values" :
+                        gr.Key.MemberType == MemberTypes.Field && gr.Key.IsStatic ? "Static fields" :
+                        gr.Key.MemberType == MemberTypes.Field ? "Instance fields" :
                         gr.Key.MemberType == MemberTypes.Method && gr.Key.IsStatic ? "Static methods" :
                         gr.Key.MemberType == MemberTypes.Method ? "Instance methods" :
                         gr.Key.MemberType == MemberTypes.Property && gr.Key.IsStatic ? "Static properties" :
@@ -1361,10 +1369,11 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                             .SelectMany(acc => acc.Select((kvp, i) => new TR(
                                 new TD(
                                     new DIV { class_ = "withicon " + (kvp.Value.Member.MemberType == MemberTypes.NestedType ? _types[kvp.Key].GetTypeCssClass() : kvp.Value.Member.MemberType.ToString()) }._(
-                                        friendlyMemberName(kvp.Value.Member, returnType: true, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref())
+                                        friendlyMemberName(kvp.Value.Member, returnType: !isEnumValues, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref())
                                     ),
                                     formatMemberExtraInfo(req, kvp.Value.Member, false)
                                 ),
+                                isEnumValues ? new TD("{0:X4}".Fmt(((FieldInfo) kvp.Value.Member).GetRawConstantValue())) : null,
                                 i > 0 ? null : new TD { rowspan = acc.Count }._(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
                                     ? (object) new EM("This member is not documented.")
                                     : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req)
