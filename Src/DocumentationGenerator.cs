@@ -567,7 +567,7 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
         {
             yield return new H1("All members");
             yield return new DIV { class_ = "innercontent" }._(generateAll(
-                _members.Where(k => k.Value.Member.MemberType != MemberTypes.NestedType),
+                _members.Where(k => k.Value.Member.MemberType != MemberTypes.NestedType && !typeof(Delegate).IsAssignableFrom(k.Value.Member.DeclaringType)),
                 k =>
                     k.Value.Member.MemberType == MemberTypes.Constructor ? 0 :
                     k.Value.Member.MemberType == MemberTypes.Method ? 1 :
@@ -1061,7 +1061,7 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
             if (!member.Name.StartsWith("get_") && !member.Name.StartsWith("set_"))
                 return false;
             string partName = member.Name.Substring(4);
-            return member.DeclaringType.GetMembers().Any(m => m.MemberType == MemberTypes.Property && m.Name == partName);
+            return member.DeclaringType.GetMembers(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance).Any(m => m.MemberType == MemberTypes.Property && m.Name == partName);
         }
 
         private bool isEventAdderOrRemover(MemberInfo member)
@@ -1279,7 +1279,8 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
             bool isDelegate = typeof(Delegate).IsAssignableFrom(type);
 
             yield return new UL { class_ = "typeinfo" }._(
-                new LI("Namespace: ", new A(type.Namespace) { class_ = "namespace", href = req.Url.WithPathOnly("/" + type.Namespace.UrlEscape()).ToHref() }),
+                new LI("Assembly: ", type.Assembly.FullName),
+                new LI("Namespace: ", new A { class_ = "namespace", href = req.Url.WithPathOnly("/" + type.Namespace.UrlEscape()).ToHref() }._(type.Namespace)),
                 type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true)) : null,
                 inheritsFrom(type, req),
                 implementsInterfaces(type, req),
@@ -1375,7 +1376,7 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                                 ),
                                 isEnumValues ? new TD("{0:X4}".Fmt(((FieldInfo) kvp.Value.Member).GetRawConstantValue())) : null,
                                 i > 0 ? null : new TD { rowspan = acc.Count }._(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
-                                    ? (object) new EM("This member is not documented.")
+                                    ? (object) new EM(acc.Count > 1 ? "These members are not documented." : "This member is not documented.")
                                     : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req)
                                 )
                             )));
@@ -1493,7 +1494,7 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                             (MemberInfo) interf.GetProperties().FirstOrDefault(p => p.GetGetMethod() == map.InterfaceMethods[index] || p.GetSetMethod() == map.InterfaceMethods[index]) ??
                             (MemberInfo) interf.GetEvents().FirstOrDefault(e => e.GetAddMethod() == map.InterfaceMethods[index] || e.GetRemoveMethod() == map.InterfaceMethods[index]) ??
                             map.InterfaceMethods[index];
-                        var interfaceMemberDefinition = findInterfaceMemberDefinition(interfaceMember);
+                        var interfaceMemberDefinition = findMemberDefinition(interfaceMember);
                         var dcmn = documentationCompatibleMemberName(interfaceMemberDefinition);
                         if (_members.ContainsKey(dcmn))
                             url = req.Url.WithPathOnly("/" + dcmn.UrlEscape()).ToHref();
@@ -1506,22 +1507,26 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
             }
         }
 
-        private MemberInfo findInterfaceMemberDefinition(MemberInfo member)
+        private MemberInfo findMemberDefinition(MemberInfo member)
         {
             var method = member as MethodInfo;
             if (method != null)
             {
                 if (method.IsGenericMethod && !method.IsGenericMethodDefinition)
-                    return findInterfaceMemberDefinition(method.GetGenericMethodDefinition());
+                    return findMemberDefinition(method.GetGenericMethodDefinition());
                 if (!method.DeclaringType.IsGenericType || method.DeclaringType.IsGenericTypeDefinition)
                     return method;
                 var def = method.DeclaringType.GetGenericTypeDefinition();
                 return def.GetMethods((method.IsPublic ? BindingFlags.Public : BindingFlags.NonPublic) | (method.IsStatic ? BindingFlags.Static : BindingFlags.Instance))
                     .FirstOrDefault(m => sameExcept(m, method, def.GetGenericArguments(), method.DeclaringType.GetGenericArguments()));
             }
+            if (!member.DeclaringType.IsGenericType || member.DeclaringType.IsGenericTypeDefinition)
+                return member;
+
             var prop = member as PropertyInfo;
             if (prop != null)
                 return member.DeclaringType.GetGenericTypeDefinition().GetProperties().FirstOrDefault(p => p.Name == prop.Name);
+
             var evnt = member as EventInfo;
             Ut.Assert(evnt != null);
             return member.DeclaringType.GetGenericTypeDefinition().GetEvents().FirstOrDefault(e => e.Name == evnt.Name);
