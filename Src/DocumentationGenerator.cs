@@ -1284,7 +1284,8 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                 type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true)) : null,
                 inheritsFrom(type, req),
                 implementsInterfaces(type, req),
-                type.IsInterface ? implementedBy(type, req) : derivedTypes(type, req)
+                type.IsInterface ? implementedBy(type, req) : derivedTypes(type, req),
+                type.IsEnum ? new LI("Underlying integer type: ", type.GetEnumUnderlyingType().FullName) : null
             );
 
             MethodInfo m = null;
