@@ -260,9 +260,11 @@ table.doclist td .withicon {
     padding-left: 3em;
 }
 
-ul.extra {
+.extra {
     font-size: 8pt;
     opacity: .4;
+}
+ul.extra {
     margin: .2em 0 0 3em;
     padding: 0;
     list-style-type: none;
@@ -1170,9 +1172,14 @@ strong.sep {
                                 new A { href = req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref() }._(friendlyTypeName(kvp.Value.Type, span: true))
                             )
                         ),
-                        new TD(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
-                            ? (object) new EM("This type is not documented.")
-                            : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req))
+                        new TD(
+                            kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
+                                ? (object) new EM("This type is not documented.")
+                                : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req),
+                            kvp.Value.Documentation == null || kvp.Value.Documentation.Element("remarks") == null
+                                ? null
+                                : new object[] { " ", new SPAN { class_ = "extra" }._("(see also remarks)") }
+                        )
                     ))
                 )
             );
@@ -1343,32 +1350,32 @@ strong.sep {
 
             if (!isDelegate)
             {
-                foreach (var gr in _types[getTypeFullName(type)].Members.Where(kvp => isPublic(kvp.Value.Member)).GroupBy(kvp => new
+                foreach (var group in _types[getTypeFullName(type)].Members.Where(kvp => isPublic(kvp.Value.Member)).GroupBy(kvp => new
                 {
                     MemberType = kvp.Value.Member.MemberType,
                     IsStatic = isStatic(kvp.Value.Member)
                 }))
                 {
-                    var isEnumValues = gr.Key.MemberType == MemberTypes.Field && gr.Key.IsStatic && type.IsEnum;
+                    var isEnumValues = group.Key.MemberType == MemberTypes.Field && group.Key.IsStatic && type.IsEnum;
 
                     yield return new H2(
-                        gr.Key.MemberType == MemberTypes.Constructor ? "Constructors" :
-                        gr.Key.MemberType == MemberTypes.Event ? "Events" :
+                        group.Key.MemberType == MemberTypes.Constructor ? "Constructors" :
+                        group.Key.MemberType == MemberTypes.Event ? "Events" :
                         isEnumValues ? "Enumeration values" :
-                        gr.Key.MemberType == MemberTypes.Field && gr.Key.IsStatic ? "Static fields" :
-                        gr.Key.MemberType == MemberTypes.Field ? "Instance fields" :
-                        gr.Key.MemberType == MemberTypes.Method && gr.Key.IsStatic ? "Static methods" :
-                        gr.Key.MemberType == MemberTypes.Method ? "Instance methods" :
-                        gr.Key.MemberType == MemberTypes.Property && gr.Key.IsStatic ? "Static properties" :
-                        gr.Key.MemberType == MemberTypes.Property ? "Instance properties" :
-                        gr.Key.MemberType == MemberTypes.NestedType ? "Nested types" : "Additional members"
+                        group.Key.MemberType == MemberTypes.Field && group.Key.IsStatic ? "Static fields" :
+                        group.Key.MemberType == MemberTypes.Field ? "Instance fields" :
+                        group.Key.MemberType == MemberTypes.Method && group.Key.IsStatic ? "Static methods" :
+                        group.Key.MemberType == MemberTypes.Method ? "Instance methods" :
+                        group.Key.MemberType == MemberTypes.Property && group.Key.IsStatic ? "Static properties" :
+                        group.Key.MemberType == MemberTypes.Property ? "Instance properties" :
+                        group.Key.MemberType == MemberTypes.NestedType ? "Nested types" : "Additional members"
                     );
 
                     yield return new TABLE { class_ = "doclist" }._(Ut.Lambda(() =>
                     {
                         // Group members with the same documentation
-                        return gr.GroupConsecutive((k1, k2) => sameSummary(k1.Value.Documentation, k2.Value.Documentation))
-                            .SelectMany(acc => acc.Select((kvp, i) => new TR(
+                        return group.GroupConsecutive((k1, k2) => summaryIsMergable(k1.Value.Documentation, k2.Value.Documentation))
+                            .SelectMany(gr => gr.Select((kvp, i) => new TR(
                                 kvp.Value.Member.MemberType == MemberTypes.Constructor || kvp.Value.Member.MemberType == MemberTypes.NestedType ? null :
                                     new TD { class_ = "membertype" }._(
                                         friendlyTypeName(
@@ -1386,9 +1393,13 @@ strong.sep {
                                     formatMemberExtraInfo(req, kvp.Value.Member, false)
                                 ),
                                 isEnumValues ? new TD("{0:X4}".Fmt(((FieldInfo) kvp.Value.Member).GetRawConstantValue())) : null,
-                                i > 0 ? null : new TD { rowspan = acc.Count }._(kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
-                                    ? (object) new EM(acc.Count > 1 ? "These members are not documented." : "This member is not documented.")
-                                    : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req)
+                                i > 0 ? null : new TD { rowspan = gr.Count }._(
+                                    kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
+                                        ? (object) new EM(gr.Count > 1 ? "These members are not documented." : "This member is not documented.")
+                                        : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req),
+                                    kvp.Value.Documentation == null || kvp.Value.Documentation.Element("remarks") == null
+                                        ? null
+                                        : new object[] { " ", new SPAN { class_ = "extra" }._("(see also remarks)") }
                                 )
                             )));
                     }));
@@ -1421,7 +1432,7 @@ strong.sep {
             );
         }
 
-        private bool sameSummary(XElement doc1, XElement doc2)
+        private bool summaryIsMergable(XElement doc1, XElement doc2)
         {
             if (doc1 == null)
                 return doc2 == null;
@@ -1431,6 +1442,11 @@ strong.sep {
                 return doc2.Element("summary") == null;
             else if (doc2.Element("summary") == null)
                 return false;
+
+            // We do not compare the /content/ of remarks tags, but we want to merge summaries only if both have or both don’t have a remarks tag
+            if ((doc1.Element("remarks") == null) != (doc2.Element("remarks") == null))
+                return false;
+
             return XNode.DeepEquals(doc1.Element("summary"), doc2.Element("summary"));
         }
 
