@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -11,6 +12,7 @@ using RT.Servers;
 using RT.TagSoup;
 using RT.Util;
 using RT.Util.ExtensionMethods;
+using RT.Util.Json;
 
 namespace RT.DocGen
 {
@@ -244,7 +246,7 @@ code {
     padding: 0 .2em;
 }
 
-.paramtype { text-align: right; }
+.membertype { text-align: right; }
 
 table.doclist {
     border-collapse: collapse;
@@ -289,9 +291,6 @@ strong.sep {
     font-size: 14pt;
     margin: 2em 2em;
 }
-
-span.parameter, span.typeparameter, span.member { white-space: nowrap; }
-h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; }
 ";
 
         private class memberComparer : IComparer<string>
@@ -795,8 +794,8 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                 foreach (var p in m.GetParameters())
                 {
                     if (!first) yield return indent ? ",\n    " : ", ";
-                    first = false;
                     var f = Ut.NewArray<object>(
+                        first && m.IsDefined<ExtensionAttribute>() ? "this " : null,
                         parameterTypes && p.IsOut ? "out " : null,
                         parameterTypes && p.IsDefined<ParamArrayAttribute>() ? "params " : null,
                         parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: !p.IsOut, span: !stringOnly) : null,
@@ -804,6 +803,7 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                         parameterNames ? (stringOnly || !parameterTypes ? (object) p.Name : new STRONG(p.Name)) : null,
                         parameterDefaultValues && p.Attributes.HasFlag(ParameterAttributes.HasDefault) ? friendlyDefaultValue(p.DefaultValue, baseUrl, stringOnly) : null
                     );
+                    first = false;
                     yield return stringOnly ? (object) stringSoup(f) : new SPAN { class_ = "parameter" }._(f);
                 }
                 yield return indent && m.GetParameters().Any() ? "\n)" : ")";
@@ -1189,7 +1189,7 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                 member.MemberType == MemberTypes.Constructor ? "Constructor: " :
                 member.MemberType == MemberTypes.Event ? "Event: " :
                 member.MemberType == MemberTypes.Field ? (isStatic ? "Static field: " : "Field: ") :
-                member.MemberType == MemberTypes.Method ? (isStatic ? "Static method: " : "Method: ") :
+                member.MemberType == MemberTypes.Method ? (member.IsDefined<ExtensionAttribute>() ? "Extension method: " : isStatic ? "Static method: " : "Method: ") :
                 member.MemberType == MemberTypes.Property ? (isStatic ? "Static property: " : "Property: ") : "Member: ",
                 friendlyMemberName(member, returnType: true, parameterTypes: true)
             );
@@ -1369,9 +1369,19 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
                         // Group members with the same documentation
                         return gr.GroupConsecutive((k1, k2) => sameSummary(k1.Value.Documentation, k2.Value.Documentation))
                             .SelectMany(acc => acc.Select((kvp, i) => new TR(
-                                new TD(
+                                kvp.Value.Member.MemberType == MemberTypes.Constructor || kvp.Value.Member.MemberType == MemberTypes.NestedType ? null :
+                                    new TD { class_ = "membertype" }._(
+                                        friendlyTypeName(
+                                            kvp.Value.Member is EventInfo ? ((EventInfo) kvp.Value.Member).EventHandlerType :
+                                            kvp.Value.Member is FieldInfo ? ((FieldInfo) kvp.Value.Member).FieldType :
+                                            kvp.Value.Member is MethodInfo ? ((MethodInfo) kvp.Value.Member).ReturnType :
+                                            kvp.Value.Member is PropertyInfo ? ((PropertyInfo) kvp.Value.Member).PropertyType : null,
+                                            includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true
+                                        )
+                                    ),
+                                new TD { class_ = "member" }._(
                                     new DIV { class_ = "withicon " + (kvp.Value.Member.MemberType == MemberTypes.NestedType ? _types[kvp.Key].GetTypeCssClass() : kvp.Value.Member.MemberType.ToString()) }._(
-                                        friendlyMemberName(kvp.Value.Member, returnType: !isEnumValues, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref())
+                                        friendlyMemberName(kvp.Value.Member, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref())
                                     ),
                                     formatMemberExtraInfo(req, kvp.Value.Member, false)
                                 ),
@@ -1390,12 +1400,13 @@ h1 span.parameter, h1 span.typeparameter, h1 span.member { white-space: normal; 
         {
             yield return new H2("Parameters");
             yield return new TABLE { class_ = "doclist" }._(
-                method.GetParameters().Select(pi =>
+                method.GetParameters().Select((pi, index) =>
                 {
                     var parameterDocumentation = methodDocumentation == null ? null : methodDocumentation.Elements("param")
                         .FirstOrDefault(xe => xe.Attribute("name") != null && xe.Attribute("name").Value == pi.Name);
                     return new TR(
-                        new TD { class_ = "paramtype" }._(
+                        new TD { class_ = "membertype" }._(
+                            index == 0 && method.IsDefined<ExtensionAttribute>() ? "this " : null,
                             pi.IsOut ? "out " : null,
                             friendlyTypeName(pi.ParameterType, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), inclRef: !pi.IsOut, span: true)
                         ),
