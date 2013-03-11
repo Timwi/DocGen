@@ -35,6 +35,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CrefParser.cs" />
+    <Compile Include="CssSahifa.cs" />
+    <Compile Include="CssSky.cs" />
     <Compile Include="DocumentationGenerator.cs">
     </Compile>
     <Compile Include="PropellerModule.cs" />

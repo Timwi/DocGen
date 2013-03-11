@@ -1,0 +1,321 @@
+﻿using System;
+using RT.Util.ExtensionMethods;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace RT.DocGen
+{
+    public static partial class Css
+    {
+        public const string Sahifa = @"
+body {
+    font-family: ""Minion Pro Caption"", ""Georgia"", serif;
+    font-size: 13pt;
+    margin: 0;
+    padding: 0;
+}
+
+.type, .Method, .Constructor, .Property, .Event, .Field, .Class, .Struct, .Enum, .Interface, .Delegate, .parameter, .generic-parameter, .namespace, .numeric, .assembly, code {
+    font-family: ""Candara"", ""Segoe UI"", ""Verdana"", sans-serif;
+    font-size: 11pt;
+    color: #148;
+}
+
+h1 .type, h1 .Method, h1 .Constructor, h1 .Property, h1 .Event, h1 .Field, h1 .Class, h1 .Struct, h1 .Enum, h1 .Interface, h1 .Delegate, h1 .namespace, h1 .parameter {
+    font-size: 20pt;
+}
+
+h1 .member-name {
+    font-size: 24pt;
+}
+
+a {
+    color: #147;
+}
+
+    a:visited {
+        color: #1c69c0;
+    }
+
+td {
+    vertical-align: top;
+}
+
+    td.left {
+        padding-right: 1.5em;
+        box-shadow: inset -4px 0px 9px -6px rgba(0,0,0,.3);
+        text-align: center;
+    }
+
+        td.left > * {
+            text-align: left;
+        }
+
+    td.right {
+        width: 100%;
+        padding: 3em 2em 10em;
+    }
+
+    td.numeric {
+        text-align: right;
+    }
+
+.boxy {
+    display: inline-block;
+    margin-bottom: 1em;
+    padding: .3em 1em;
+}
+
+.links, .auth {
+    font-variant: small-caps;
+    text-align: center;
+}
+
+.tree ul {
+    padding: 0;
+}
+
+.tree li {
+    list-style-type: none;
+    text-indent: -2.5em;
+    padding-left: 2.5em;
+}
+
+    .tree li div.namespace:before {
+        content: '{ }';
+        font-family: ""Verdana"", sans-serif;
+        font-weight: bold;
+        font-size: 8pt;
+    }
+
+.indent {
+    margin-left: 1em;
+}
+
+.Class:before, .Struct:before, .Enum:before, .Interface:before, .Delegate:before,
+.Constructor:before, .Method:before, .Property:before, .Event:before, .Field:before,
+.tree li div.namespace:before {
+    width: 23px;
+    display: inline-block;
+    text-align: center;
+    border-radius: 5px;
+    margin-right: .5em;
+    margin-top: 1px;
+    text-indent: 0;
+    padding-left: 0;
+    color: black;
+}
+
+div.Class:before {
+    content: 'Cl';
+    background: #4df;
+}
+
+div.Struct:before {
+    content: 'St';
+    background: #f9f;
+}
+
+div.Enum:before {
+    content: 'En';
+    background: #4f8;
+}
+
+div.Interface:before {
+    content: 'In';
+    background: #f44;
+}
+
+div.Delegate:before {
+    content: 'De';
+    background: #ff4;
+}
+
+div.Constructor:before {
+    content: 'C';
+    background: #bfb;
+}
+
+div.Method:before {
+    content: 'M';
+    background: #cdf;
+}
+
+div.Property:before {
+    content: 'P';
+    background: #fcf;
+}
+
+div.Event:before {
+    content: 'E';
+    background: #faa;
+}
+
+div.Field:before {
+    content: 'F';
+    background: #ee8;
+}
+
+table.legend {
+    min-width: 230px;
+}
+
+.legend p {
+    font-variant: small-caps;
+    text-align: center;
+    margin: 0 -.7em;
+    background: -moz-linear-gradient(#e8f0ff, #d0e0f8);
+    background: linear-gradient(#e8f0ff, #d0e0f8);
+    border-radius: 5px;
+}
+
+td.legend {
+    padding: .3em .5em;
+}
+
+.content {
+    padding: 0;
+}
+
+.innercontent {
+    padding: 0;
+}
+
+h1 {
+    margin: 0 0 1em 0;
+    font-weight: bold;
+    font-size: 24pt;
+    border-bottom: 1px solid #888;
+}
+
+    h1 .Method, h1 .Constructor {
+        font-weight: normal;
+        color: #668;
+    }
+
+        h1 .Method strong, h1 .Constructor strong {
+            font-weight: bold;
+            color: black;
+        }
+
+    h1 .namespace {
+        color: #aac;
+        font-weight: normal;
+    }
+
+    h1.namespace-heading .namespace {
+        color: black;
+        font-weight: bold;
+    }
+
+h2 {
+    font-weight: bold;
+    font-size: 20pt;
+    border-bottom: 1px solid #bcf;
+    margin: 1.5em 0 .8em;
+}
+
+pre, code {
+    font-family: ""Candara"", ""Segoe UI"", ""Verdana"", sans-serif;
+}
+
+pre {
+    background: #eee;
+    padding: .7em 1.5em;
+    border-left: 3px solid #8ad;
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+    font-size: 11pt;
+}
+
+    pre, pre .Method, pre .Constructor {
+        color: black;
+    }
+
+.membertype {
+    text-align: right;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+    table.doclist td {
+        border-top: 1px solid #dfefff;
+        padding: .5em 1em;
+    }
+
+    table.doclist tr:first-child td {
+        border-top: none;
+    }
+
+    table.doclist td .withicon {
+        text-indent: -3em;
+        padding-left: 3em;
+    }
+
+    table.doclist td.type {
+        font-weight: bold;
+        padding-left: 3em;
+        text-indent: -3em;
+    }
+
+    table.doclist td.membertype {
+        padding-right: .5em;
+        padding-left: 0;
+    }
+
+    table.doclist td.member {
+        padding-left: 0;
+    }
+
+        table.doclist td.member strong.member-name, table.doclist td.member strong.member-name .type {
+            font-size: 14pt;
+        }
+
+    table.doclist td.documentation {
+        border-left: 1px solid #dfefff;
+    }
+
+ul.extra {
+    margin: .2em 0 0 1.5em;
+    padding: 0;
+    list-style-type: none;
+}
+
+    ul.extra li {
+        margin: 0;
+    }
+
+.extra {
+    font-size: 9pt;
+    opacity: .4;
+}
+
+    .extra .type, .extra .Method, .extra .Constructor, .extra .Property, .extra .Event, .extra .Field, .extra .Class, .extra .Struct, .extra .Enum, .extra .Interface, .extra .Delegate, .extra .namespace, .extra .parameter, .extra .member-name {
+        font-size: 8pt !important;
+    }
+
+.sep {
+    padding: 0 1em;
+}
+
+b {
+    padding-right: 1em;
+}
+
+.missing {
+    background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAC8SURBVDhPY2AYtiBBgX92vDz/zXh5vkMUexJkGNhAOf6sBAWB//FyfEYUGQpyWZaGADdVXBirwKUK8iYQ20Ncx59FmeuA3kuQF6gEuq6LKuEHCq9ERYFokGEgmiLXgTSDvAgylCquAxsI9CrIZSBvU+w6mIGgJEMVw0CGAGN2LdVcFy0rJAFKe1RzHSTtUdG7VHMZ1Q2C5gxgycJ/M06B35ciCyAlCv9scNqjRt4FuQiEQckFlKgpch05mgHc9Dht+XE3awAAAABJRU5ErkJggg==) no-repeat right center;
+}
+
+.highlighted {
+    background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACDSURBVDhPzdPNDYAgDIZhNnEU3MRRcBJX0UlcRduEJv4V2g8OkpAeSJ5weBvCn09M69DlfwRN47ztNFMTKBBhB18YfEIwqEFusAaZQStUBb2QCqLQC+QguSN5QOctm4wuKKZ22AIXw0Zg06Z4YBMoy26BXaAFhsAS3AR+wV3AK0xgPAFi473SDF1CWAAAAABJRU5ErkJggg==) no-repeat right center;
+}
+
+.warning {
+    font-size: 14pt;
+    margin: 2em 2em;
+}";
+    }
+}

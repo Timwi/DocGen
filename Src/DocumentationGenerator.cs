@@ -91,210 +91,6 @@ namespace RT.DocGen
         private List<Tuple<string, string>> _assemblyLoadErrors = new List<Tuple<string, string>>();
         public List<Tuple<string, string>> AssemblyLoadErrors { get { return _assemblyLoadErrors; } }
 
-        private static string _css = @"
-body {
-    background: #eef;
-    font-family: ""Candara"", ""Segoe UI"", ""Verdana"", sans-serif;
-    font-size: 11pt;
-    margin-bottom: 10em;
-}
-
-td {
-    vertical-align: top;
-}
-td.left {
-    padding-right: 1.5em;
-}
-td.right {
-    width: 100%;
-}
-
-.boxy {
-    border: 2px solid #666;
-    border-top-color: #ccc;
-    border-left-color: #aaa;
-    border-right-color: #666;
-    border-bottom-color: #444;
-    border-radius: 10px;
-    background: white;
-    box-shadow: 3px 3px 3px #ccc;
-    margin-bottom: 1em;
-    padding: .3em 1em;
-}
-
-.links, .auth {
-    font-variant: small-caps;
-    text-align: center;
-}
-
-.tree ul {
-    padding: 0;
-}
-
-.tree li {
-    list-style-type: none;
-    text-indent: -3em;
-    padding-left: 3em;
-}
-
-.tree li div.namespace:before {
-    content: '{ }';
-    font-family: ""Verdana"", sans-serif;
-    font-weight: bold;
-    font-size: 8pt;
-}
-
-.indent {
-    margin-left: 2em;
-}
-
-.Class:before, .Struct:before, .Enum:before, .Interface:before, .Delegate:before,
-    .Constructor:before, .Method:before, .Property:before, .Event:before, .Field:before,
-    .tree li div.namespace:before {
-    width: 23px;
-    display: inline-block;
-    text-align: center;
-    border-radius: 5px;
-    margin-right: .5em;
-    margin-top: 1px;
-    text-indent: 0;
-    padding-left: 0;
-    color: black;
-}
-
-div.Class:before       { content: 'Cl'; background: #4df; }
-div.Struct:before      { content: 'St'; background: #f9f; }
-div.Enum:before        { content: 'En'; background: #4f8; }
-div.Interface:before   { content: 'In'; background: #f44; }
-div.Delegate:before    { content: 'De'; background: #ff4; }
-div.Constructor:before { content: 'C'; background: #bfb; }
-div.Method:before      { content: 'M'; background: #cdf; }
-div.Property:before    { content: 'P'; background: #fcf; }
-div.Event:before       { content: 'E'; background: #faa; }
-div.Field:before       { content: 'F'; background: #ee8; }
-
-.legend p {
-    font-variant: small-caps;
-    text-align: center;
-    margin: 0 -.7em;
-    background: -moz-linear-gradient(#e8f0ff, #d0e0f8);
-    background: linear-gradient(#e8f0ff, #d0e0f8);
-    border-radius: 5px;
-}
-
-.content {
-    padding: 0;
-}
-
-.innercontent {
-    padding: 1em 2em 3em;
-}
-
-h1 {
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    background: -moz-linear-gradient(#fff, #abe);
-    background: linear-gradient(#fff, #abe);
-    margin: 0;
-    padding: .5em 1em;
-    font-weight: bold;
-    font-size: 24pt;
-    border-bottom: 1px solid #888;
-}
-
-h1 .Method, h1 .Constructor {
-    font-weight: normal;
-    color: #668;
-}
-
-h1 .Method strong, h1 .Constructor strong {
-    font-weight: bold;
-    color: black;
-}
-
-h1 .namespace {
-    color: #668;
-    font-weight: normal;
-}
-
-h2 {
-    font-weight: bold;
-    font-size: 18pt;
-    border-bottom: 1px solid #aad;
-    margin: 1.5em 0 .8em;
-    background: -moz-linear-gradient(left, #dde 0%, #fff 15%);
-    background: linear-gradient(left, #dde 0%, #fff 20%);
-    border-top-left-radius: 10px;
-    padding: 0 1em;
-}
-
-pre, code {
-    font-family: ""Candara"", ""Segoe UI"", ""Verdana"", sans-serif;
-}
-
-pre {
-    background: #eee;
-    padding: .7em 1.5em;
-    border-left: 3px solid #8ad;
-    border-top-right-radius: 20px;
-    border-bottom-right-radius: 20px;
-}
-
-code {
-    color: #468;
-    font-weight: bold;
-    padding: 0 .2em;
-}
-
-.membertype { text-align: right; }
-
-table.doclist {
-    border-collapse: collapse;
-}
-table.doclist td {
-    border: 1px solid #cde;
-    padding: .5em 1em;
-}
-table.doclist td .withicon {
-    text-indent: -3em;
-    padding-left: 3em;
-}
-
-.extra {
-    font-size: 8pt;
-    opacity: .4;
-}
-ul.extra {
-    margin: .2em 0 0 3em;
-    padding: 0;
-    list-style-type: none;
-}
-ul.extra li {
-    margin: 0;
-}
-
-.sep {
-    padding: 0 1em;
-    font-family: ""Verdana"", sans-serif;
-}
-strong.sep {
-    padding-left: 0;
-}
-
-.missing {
-    background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAC8SURBVDhPY2AYtiBBgX92vDz/zXh5vkMUexJkGNhAOf6sBAWB//FyfEYUGQpyWZaGADdVXBirwKUK8iYQ20Ncx59FmeuA3kuQF6gEuq6LKuEHCq9ERYFokGEgmiLXgTSDvAgylCquAxsI9CrIZSBvU+w6mIGgJEMVw0CGAGN2LdVcFy0rJAFKe1RzHSTtUdG7VHMZ1Q2C5gxgycJ/M06B35ciCyAlCv9scNqjRt4FuQiEQckFlKgpch05mgHc9Dht+XE3awAAAABJRU5ErkJggg==) no-repeat right center;
-}
-
-.highlighted {
-    background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACDSURBVDhPzdPNDYAgDIZhNnEU3MRRcBJX0UlcRduEJv4V2g8OkpAeSJ5weBvCn09M69DlfwRN47ztNFMTKBBhB18YfEIwqEFusAaZQStUBb2QCqLQC+QguSN5QOctm4wuKKZ22AIXw0Zg06Z4YBMoy26BXaAFhsAS3AR+wV3AK0xgPAFi473SDF1CWAAAAABJRU5ErkJggg==) no-repeat right center;
-}
-
-.warning {
-    font-size: 14pt;
-    margin: 2em 2em;
-}
-";
-
         private class memberComparer : IComparer<string>
         {
             public int Compare(string x, string y)
@@ -419,7 +215,11 @@ strong.sep {
             if (_resolver == null)
             {
                 _resolver = new UrlPathResolver();
-                _resolver.Add(new UrlPathHook(path: "/css", specificPath: true, handler: req => HttpResponse.Create(_css, "text/css; charset=utf-8")));
+                foreach (var field in typeof(Css).GetFields(BindingFlags.Static | BindingFlags.Public).Where(f => f.FieldType == typeof(string)))
+                {
+                    var cssCode = (string) field.GetValue(null);
+                    _resolver.Add(new UrlPathHook(path: "/css/" + field.Name, specificPath: true, handler: req => HttpResponse.Create(cssCode, "text/css; charset=utf-8")));
+                }
                 _resolver.Add(new UrlPathHook(path: "/q", handler: quickUrl));
                 if (_usernamePasswordFile != null)
                     _resolver.Add(new UrlPathHook(path: "/auth", handler: req => Session.Enable<docGenSession>(req, session => _authenticator.Handle(req, session.Username, session.SetUsername))));
@@ -508,7 +308,7 @@ strong.sep {
                 var html = new HTML(
                     new HEAD(
                         new TITLE(title),
-                        new LINK { href = req.Url.WithPathOnly("/css").ToHref(), rel = "stylesheet", type = "text/css" }
+                        new LINK { href = req.Url.WithPathOnly("/css/Sahifa").ToHref(), rel = "stylesheet", type = "text/css" }
                     ),
                     new BODY(
                         new TABLE { class_ = "layout" }._(
@@ -529,10 +329,10 @@ strong.sep {
                                     ),
                                     new DIV { class_ = "boxy legend" }._(
                                         new P("Legend"),
-                                        new TABLE { style = "width:100%" }._(
+                                        new TABLE { class_ = "legend" }._(
                                             new TR(
                                                 new[] { new[] { "Class", "Struct", "Enum", "Interface", "Delegate" }, new[] { "Constructor", "Method", "Property", "Event", "Field" } }
-                                                    .Select(arr => new TD(arr.Select(x => new DIV { class_ = x }._(x))))
+                                                    .Select(arr => new TD { class_ = "legend" }._(arr.Select(x => new DIV { class_ = x }._(x))))
                                             )
                                         )
                                     ),
@@ -592,7 +392,7 @@ strong.sep {
             }
 
             yield return new DIV(
-                new STRONG { class_ = "sep" }._("Jump to:"),
+                new B("Jump to:"),
                 categories.Select(cat => new A { href = "#cat" + cat }._(humanReadable[cat])).InsertBetween<object>(new SPAN { class_ = "sep" }._("|"))
             );
 
@@ -603,22 +403,28 @@ strong.sep {
             }
         }
 
-        private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces = false, bool includeOuterTypes = false, bool variance = false, string baseUrl = null, bool inclRef = false, bool span = false, bool modifiers = false, bool namespaceSpan = false)
+        private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces = false, bool includeOuterTypes = false, bool variance = false, string baseUrl = null, bool inclRef = false, bool isOut = false, bool isThis = false, bool isParams = false, bool span = false, bool modifiers = false, bool namespaceSpan = false)
         {
             if (span)
             {
                 yield return new SPAN { class_ = "type", title = stringSoup(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true)) }._(
-                    friendlyTypeName(t, includeNamespaces, includeOuterTypes, variance, baseUrl, inclRef, span: false, namespaceSpan: true)
+                    friendlyTypeName(t, includeNamespaces, includeOuterTypes, variance, baseUrl, inclRef, isOut, isThis, span: false, namespaceSpan: true)
                 );
                 yield break;
             }
 
+            if (isThis)
+                yield return "this ";
+
             if (t.IsByRef)
             {
                 if (inclRef)
-                    yield return "ref ";
+                    yield return isOut ? "out " : "ref ";
                 t = t.GetElementType();
             }
+
+            if (isParams)
+                yield return "params ";
 
             if (t.IsArray)
             {
@@ -726,7 +532,7 @@ strong.sep {
                 containingType ? "." : null,
                 m.MemberType == MemberTypes.Property
                     ? (object) friendlyPropertyName((PropertyInfo) m, parameterTypes, parameterNames, namespaces, indent, url, baseUrl, stringOnly)
-                    : stringOnly ? (object) m.Name : new STRONG(url == null ? (object) m.Name : new A { href = url }._(m.Name))
+                    : stringOnly ? (object) m.Name : new STRONG { class_ = "member-name" }._(url == null ? (object) m.Name : new A { href = url }._(m.Name))
             );
             return stringOnly ? (object) stringSoup(arr) : new SPAN { class_ = m.MemberType.ToString(), title = stringSoup(friendlyMemberName(m, true, true, true, true, true, stringOnly: true)) }._(arr);
         }
@@ -767,20 +573,20 @@ strong.sep {
                 }
             }
             if ((m.MemberType == MemberTypes.Constructor || isDelegate) && url != null)
-                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: false) : new STRONG(new A { href = url }._(friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: true)));
+                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: false) : new STRONG { class_ = "member-name" }._(new A { href = url }._(friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: true)));
             else if (isDelegate)
-                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance) : new STRONG(friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: true));
+                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance) : new STRONG { class_ = "member-name" }._(friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: true));
             else if (containingType)
                 yield return friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly);
             else if (m.MemberType == MemberTypes.Constructor)
-                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces) : new STRONG(friendlyTypeName(m.DeclaringType, includeNamespaces, baseUrl: baseUrl, span: true));
+                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces) : new STRONG { class_ = "member-name" }._(friendlyTypeName(m.DeclaringType, includeNamespaces, baseUrl: baseUrl, span: true));
             if (!stringOnly && !indent && (m.IsGenericMethod || (parameterNames && m.GetParameters().Any()))) yield return new WBR();
             if (m.MemberType != MemberTypes.Constructor && !isDelegate)
             {
                 if (containingType) yield return ".";
                 object f = cSharpCompatibleMethodName(m.Name, friendlyTypeName(((MethodInfo) m).ReturnType, includeOuterTypes: true, span: !stringOnly));
                 if (url != null) f = new A(f) { href = url };
-                if (!stringOnly) f = new STRONG(f);
+                if (!stringOnly) f = new STRONG { class_ = "member-name" }._(f);
                 yield return f;
             }
             if (m.IsGenericMethod)
@@ -797,10 +603,7 @@ strong.sep {
                 {
                     if (!first) yield return indent ? ",\n    " : ", ";
                     var f = Ut.NewArray<object>(
-                        first && m.IsDefined<ExtensionAttribute>() ? "this " : null,
-                        parameterTypes && p.IsOut ? "out " : null,
-                        parameterTypes && p.IsDefined<ParamArrayAttribute>() ? "params " : null,
-                        parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: !p.IsOut, span: !stringOnly) : null,
+                        parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: !p.IsOut, isOut: first && m.IsDefined<ExtensionAttribute>(), isThis: p.IsDefined<ParamArrayAttribute>(), isParams: p.IsDefined<ParamArrayAttribute>(), span: !stringOnly) : null,
                         parameterTypes && parameterNames ? " " : null,
                         parameterNames ? (stringOnly || !parameterTypes ? (object) p.Name : new STRONG(p.Name)) : null,
                         parameterDefaultValues && p.Attributes.HasFlag(ParameterAttributes.HasDefault) ? friendlyDefaultValue(p.DefaultValue, baseUrl, stringOnly) : null
@@ -885,7 +688,7 @@ strong.sep {
             var prms = property.GetIndexParameters();
             if (prms.Length > 0)
             {
-                yield return stringOnly ? (object) "this" : new STRONG(url == null ? (object) "this" : new A { href = url }._("this"));
+                yield return stringOnly ? (object) "this" : new STRONG { class_ = "member-name" }._(url == null ? (object) "this" : new A { href = url }._("this"));
                 yield return indent ? "[\n    " : "[";
                 if (!indent && !stringOnly) yield return new WBR();
                 bool first = true;
@@ -904,7 +707,7 @@ strong.sep {
                 yield return indent ? "\n]" : "]";
             }
             else
-                yield return stringOnly ? (object) property.Name : new STRONG(url == null ? (object) property.Name : new A { href = url }._(property.Name));
+                yield return stringOnly ? (object) property.Name : new STRONG { class_ = "member-name" }._(url == null ? (object) property.Name : new A { href = url }._(property.Name));
         }
 
         private bool shouldMemberBeDisplayed(MemberInfo m)
@@ -1132,7 +935,7 @@ strong.sep {
             string cssClass = typeinfo.GetTypeCssClass();
             if (typeinfo.Documentation == null) cssClass += " missing";
             if (typeinfo.Type == selectedMember) cssClass += " highlighted";
-            return new DIV { class_ = "type indent" }._(new DIV { class_ = cssClass }._(new A { href = req.Url.WithPathOnly("/" + typeFullName.UrlEscape()).ToHref() }._(friendlyTypeName(typeinfo.Type, span: true))),
+            return new DIV { class_ = "type indent" }._(new DIV { class_ = cssClass }._(friendlyTypeName(typeinfo.Type, span: true, baseUrl: req.Url.WithPathOnly("").ToHref())),
                 selectedMember != null && !typeof(Delegate).IsAssignableFrom(typeinfo.Type) && isMemberInside(selectedMember, typeinfo.Type)
                     ? typeinfo.Members.Where(mkvp => isPublic(mkvp.Value.Member)).Select(mkvp =>
                     {
@@ -1141,7 +944,7 @@ strong.sep {
                         string css = mkvp.Value.Member.MemberType.ToString() + " member indent";
                         if (mkvp.Value.Documentation == null) css += " missing";
                         if (mkvp.Value.Member == selectedMember) css += " highlighted";
-                        return new DIV { class_ = css }._(new A { href = req.Url.WithPathOnly("/" + mkvp.Key.UrlEscape()).ToHref() }._(friendlyMemberName(mkvp.Value.Member, parameterNames: true, omitGenericTypeParameters: true)));
+                        return new DIV { class_ = css }._(friendlyMemberName(mkvp.Value.Member, parameterNames: true, omitGenericTypeParameters: true, baseUrl: req.Url.WithPathOnly("").ToHref(), url: req.Url.WithPathOnly("/" + mkvp.Key.UrlEscape()).ToHref()));
                     })
                     : null
             );
@@ -1163,13 +966,13 @@ strong.sep {
 
         private IEnumerable<object> generateNamespaceDocumentation(string namespaceName, HttpRequest req)
         {
-            yield return new H1("Namespace: ", namespaceName);
+            yield return new H1 { class_ = "namespace-heading" }._("Namespace: ", new SPAN { class_ = "namespace" }._(namespaceName));
             yield return new DIV { class_ = "innercontent" }._(
                 new TABLE { class_ = "doclist" }._(
                     _namespaces[namespaceName].Types.Where(t => !t.Value.Type.IsNested).Select(kvp => new TR(
-                        new TD { class_ = kvp.Value.Documentation == null ? "missing" : null }._(
+                        new TD { class_ = "type" + (kvp.Value.Documentation == null ? " missing" : "") }._(
                             new DIV { class_ = kvp.Value.GetTypeCssClass() }._(
-                                new A { href = req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref() }._(friendlyTypeName(kvp.Value.Type, span: true))
+                                friendlyTypeName(kvp.Value.Type, span: true, baseUrl: req.Url.WithPathOnly("").ToHref())
                             )
                         ),
                         new TD(
@@ -1286,7 +1089,7 @@ strong.sep {
             bool isDelegate = typeof(Delegate).IsAssignableFrom(type);
 
             yield return new UL { class_ = "typeinfo" }._(
-                new LI("Assembly: ", type.Assembly.FullName),
+                new LI("Assembly: ", new SPAN { class_ = "assembly" }._(type.Assembly.FullName)),
                 new LI("Namespace: ", new A { class_ = "namespace", href = req.Url.WithPathOnly("/" + type.Namespace.UrlEscape()).ToHref() }._(type.Namespace)),
                 type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true)) : null,
                 inheritsFrom(type, req),
@@ -1376,7 +1179,7 @@ strong.sep {
                         // Group members with the same documentation
                         return group.GroupConsecutive((k1, k2) => summaryIsMergable(k1.Value.Documentation, k2.Value.Documentation))
                             .SelectMany(gr => gr.Select((kvp, i) => new TR(
-                                kvp.Value.Member.MemberType == MemberTypes.Constructor || kvp.Value.Member.MemberType == MemberTypes.NestedType ? null :
+                                kvp.Value.Member.MemberType == MemberTypes.Constructor || kvp.Value.Member.MemberType == MemberTypes.NestedType || isEnumValues ? null :
                                     new TD { class_ = "membertype" }._(
                                         friendlyTypeName(
                                             kvp.Value.Member is EventInfo ? ((EventInfo) kvp.Value.Member).EventHandlerType :
@@ -1392,8 +1195,8 @@ strong.sep {
                                     ),
                                     formatMemberExtraInfo(req, kvp.Value.Member, false)
                                 ),
-                                isEnumValues ? new TD("{0:X4}".Fmt(((FieldInfo) kvp.Value.Member).GetRawConstantValue())) : null,
-                                i > 0 ? null : new TD { rowspan = gr.Count }._(
+                                isEnumValues ? new TD { class_ = "numeric" }._("{0:X}".Fmt(((FieldInfo) kvp.Value.Member).GetRawConstantValue())) : null,
+                                i > 0 ? null : new TD { class_ = "documentation", rowspan = gr.Count }._(
                                     kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
                                         ? (object) new EM(gr.Count > 1 ? "These members are not documented." : "This member is not documented.")
                                         : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req),
@@ -1417,14 +1220,12 @@ strong.sep {
                         .FirstOrDefault(xe => xe.Attribute("name") != null && xe.Attribute("name").Value == pi.Name);
                     return new TR(
                         new TD { class_ = "membertype" }._(
-                            index == 0 && method.IsDefined<ExtensionAttribute>() ? "this " : null,
-                            pi.IsOut ? "out " : null,
-                            friendlyTypeName(pi.ParameterType, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), inclRef: !pi.IsOut, span: true)
+                            friendlyTypeName(pi.ParameterType, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), inclRef: !pi.IsOut, isOut: pi.IsOut, isThis: index == 0 && method.IsDefined<ExtensionAttribute>(), span: true)
                         ),
-                        new TD { class_ = "paramname" }._(
-                            new STRONG(pi.Name)
+                        new TD { class_ = "member" }._(
+                            new STRONG { class_ = "member-name parameter" }._(pi.Name)
                         ),
-                        new TD(parameterDocumentation == null
+                        new TD { class_ = "documentation" }._(parameterDocumentation == null
                             ? (object) new EM("This parameter is not documented.")
                             : interpretNodes(parameterDocumentation.Nodes(), req))
                     );
@@ -1505,12 +1306,6 @@ strong.sep {
                     showVirtual = false;
                 }
 
-                if (method.IsAbstract)
-                {
-                    showVirtual = false;
-                    yield return new LI("Abstract");
-                }
-
                 foreach (var interf in method.ReflectedType.GetInterfaces())
                 {
                     var map = method.ReflectedType.GetInterfaceMap(interf);
@@ -1530,7 +1325,10 @@ strong.sep {
                         showVirtual = showVirtual && !method.IsFinal;
                     }
                 }
-                if (showVirtual)
+
+                if (method.IsAbstract)
+                    yield return new LI("Abstract");
+                else if (showVirtual)
                     yield return new LI("Virtual");
             }
         }
@@ -1691,8 +1489,8 @@ strong.sep {
                     var docElem = document == null ? null : document.Elements("typeparam")
                         .Where(xe => xe.Attribute("name") != null && xe.Attribute("name").Value == gta.Name).FirstOrDefault();
                     return new TR(
-                        new TD(new STRONG(gta.Name), formatGenericConstraints(req, constraints, gta.GenericParameterAttributes)),
-                        new TD(docElem == null ? (object) new EM("This type parameter is not documented.") : interpretNodes(docElem.Nodes(), req))
+                        new TD { class_ = "member" }._(new STRONG { class_ = "generic-parameter member-name" }._(gta.Name), formatGenericConstraints(req, constraints, gta.GenericParameterAttributes)),
+                        new TD { class_ = "documentation" }._(docElem == null ? (object) new EM("This type parameter is not documented.") : interpretNodes(docElem.Nodes(), req))
                     );
                 })
             );
