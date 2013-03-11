@@ -8,8 +8,7 @@ namespace RT.DocGen
 {
     public static partial class Css
     {
-        public const string Sahifa = @"
-body {
+        public const string Sahifa = @"body {
     font-family: ""Minion Pro Caption"", ""Georgia"", serif;
     font-size: 13pt;
     margin: 0;
@@ -82,13 +81,6 @@ td {
     padding-left: 2.5em;
 }
 
-    .tree li div.namespace:before {
-        content: '{ }';
-        font-family: ""Verdana"", sans-serif;
-        font-weight: bold;
-        font-size: 8pt;
-    }
-
 .indent {
     margin-left: 1em;
 }
@@ -96,65 +88,33 @@ td {
 .Class:before, .Struct:before, .Enum:before, .Interface:before, .Delegate:before,
 .Constructor:before, .Method:before, .Property:before, .Event:before, .Field:before,
 .tree li div.namespace:before {
-    width: 23px;
+    width: 20px;
     display: inline-block;
     text-align: center;
-    border-radius: 5px;
     margin-right: .5em;
-    margin-top: 1px;
     text-indent: 0;
-    padding-left: 0;
     color: black;
+    border: 1px solid black;
+    border-left: 3px solid black;
 }
 
-div.Class:before {
-    content: 'Cl';
-    background: #4df;
-}
+div.Class:before { content: 'Cl'; border-color: rgb(226,133,5); color: rgb(226,133,5); }
+div.Struct:before { content: 'St'; border-color: rgb(129,131,226); color: rgb(129,131,226); }
+div.Enum:before { content: 'En'; border-color: rgb(234,88,81); color: rgb(234,88,81); }
+div.Interface:before { content: 'In'; border-color: rgb(192,192,0); color: rgb(192,192,0); }
+div.Delegate:before { content: 'De'; border-color: rgb(251,83,209); color: rgb(251,83,209); }
+div.Constructor:before { content: 'C'; border-color: hsl(120, 100%, 80%); color: hsl(120, 100%, 65%); }
+div.Method:before { content: 'M'; border-color: hsl(220, 100%, 90%); color: hsl(220, 100%, 80%); }
+div.Property:before { content: 'P'; border-color: hsl(300, 100%, 90%); color: hsl(300, 100%, 80%); }
+div.Event:before { content: 'E'; border-color: hsl(0, 100%, 90%); color: hsl(0, 100%, 80%); }
+div.Field:before { content: 'F'; border-color: hsl(60, 75%, 70%); color: hsl(60, 75%, 50%); }
 
-div.Struct:before {
-    content: 'St';
-    background: #f9f;
-}
-
-div.Enum:before {
-    content: 'En';
-    background: #4f8;
-}
-
-div.Interface:before {
-    content: 'In';
-    background: #f44;
-}
-
-div.Delegate:before {
-    content: 'De';
-    background: #ff4;
-}
-
-div.Constructor:before {
-    content: 'C';
-    background: #bfb;
-}
-
-div.Method:before {
-    content: 'M';
-    background: #cdf;
-}
-
-div.Property:before {
-    content: 'P';
-    background: #fcf;
-}
-
-div.Event:before {
-    content: 'E';
-    background: #faa;
-}
-
-div.Field:before {
-    content: 'F';
-    background: #ee8;
+.tree li div.namespace:before {
+    content: '{ }';
+    font-family: ""Verdana"", sans-serif;
+    font-weight: bold;
+    font-size: 8pt;
+    border: none;
 }
 
 table.legend {
