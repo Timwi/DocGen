@@ -1570,6 +1570,7 @@ namespace RT.DocGen
         private object interpretCref(string token, HttpRequest req, bool includeNamespaces)
         {
             Type actual;
+
             if (_types.ContainsKey(token))
                 return friendlyTypeName(_types[token].Type, includeNamespaces, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true);
             else if (_members.ContainsKey(token))
@@ -1579,14 +1580,35 @@ namespace RT.DocGen
             else if (token.StartsWith("T:"))
                 return new SPAN { title = token.Substring(2) }._(foreignTypeName(token.Substring(2), includeNamespaces));
             else if (token.StartsWith("M:") || token.StartsWith("P:") || token.StartsWith("E:") || token.StartsWith("F:"))
-                return CrefParser.Parse(token.Substring(2)).GetHtml(Assumption.Member,
-                    member => friendlyMemberName(member, containingType: true, parameterTypes: true),
-                    type => friendlyTypeName(type, includeOuterTypes: true, inclRef: true, span: true));
+            {
+                return new SPAN
+                {
+                    class_ = token.StartsWith("M:") ? "Method" :
+                        token.StartsWith("P:") ? "Property" :
+                        token.StartsWith("E:") ? "Event" :
+                        token.StartsWith("F:") ? "Field" : null
+                }._(
+                    CrefParser.Parse(token.Substring(2))
+                        .GetHtml(Assumption.Member,
+                            member => friendlyMemberName(member, containingType: true, parameterTypes: true),
+                            type => friendlyTypeName(type, includeOuterTypes: true, inclRef: true, span: true))
+                );
+            }
             else
                 return new SPAN { title = token.Substring(2) }._("[Unrecognized cref attribute]");
         }
 
-        private IEnumerable<object> foreignTypeName(Type type, bool includeNamespaces)
+        private object foreignTypeName(Type type, bool includeNamespaces)
+        {
+            return new SPAN { class_ = "type" }._(foreignTypeNameInner(type, includeNamespaces));
+        }
+
+        private object foreignTypeName(string type, bool includeNamespaces)
+        {
+            return new SPAN { class_ = "type" }._(foreignTypeNameInner(type, includeNamespaces));
+        }
+
+        private IEnumerable<object> foreignTypeNameInner(Type type, bool includeNamespaces)
         {
             if (includeNamespaces)
             {
@@ -1607,7 +1629,7 @@ namespace RT.DocGen
             }
         }
 
-        private IEnumerable<object> foreignTypeName(string type, bool includeNamespaces)
+        private IEnumerable<object> foreignTypeNameInner(string type, bool includeNamespaces)
         {
             var numGenerics = 0;
 
@@ -1637,7 +1659,7 @@ namespace RT.DocGen
             if (numGenerics > 0)
             {
                 yield return "<";
-                yield return Enumerable.Range(1, numGenerics).Select(i => "T" + i).JoinString(", ");
+                yield return numGenerics == 1 ? "T" : Enumerable.Range(1, numGenerics).Select(i => "T" + i).JoinString(", ");
                 yield return ">";
             }
         }
