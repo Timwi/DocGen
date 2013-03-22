@@ -68,17 +68,19 @@ namespace RT.DocGen
         private class docGenSession : FileSession
         {
             public string Username;
-            public override void CleanUp(HttpResponse response)
+            public override void CleanUp(HttpResponse response, bool wasModified)
             {
-                SessionModified = true;
-                base.CleanUp(response);
+                base.CleanUp(response, true);
             }
             public void SetUsername(string username)
             {
                 if (username == null)
-                    Delete = true;
+                    Action = SessionAction.Delete;
                 else
+                {
                     Username = username;
+                    SessionModified = true;
+                }
             }
         }
 
@@ -222,7 +224,7 @@ namespace RT.DocGen
                 }
                 _resolver.Add(new UrlPathHook(path: "/q", handler: quickUrl));
                 if (_usernamePasswordFile != null)
-                    _resolver.Add(new UrlPathHook(path: "/auth", handler: req => Session.Enable<docGenSession>(req, session => _authenticator.Handle(req, session.Username, session.SetUsername))));
+                    _resolver.Add(new UrlPathHook(path: "/auth", handler: req => Session.EnableManual<docGenSession>(req, session => _authenticator.Handle(req, session.Username, session.SetUsername))));
                 _resolver.Add(new UrlPathHook(handler: handle));
             }
 
@@ -234,7 +236,7 @@ namespace RT.DocGen
             if (req.Url.Path == "")
                 return HttpResponse.Redirect(req.Url.WithPath("/"));
 
-            return Session.Enable<docGenSession>(req, session =>
+            return Session.EnableManual<docGenSession>(req, session =>
             {
                 if (session.Username == null && _usernamePasswordFile != null)
                     return HttpResponse.Redirect(req.Url.WithPathOnly("/auth/login").WithQuery("returnto", req.Url.ToHref()));
