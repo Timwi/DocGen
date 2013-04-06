@@ -136,6 +136,7 @@ td.legend {
 
 .content {
     padding: 0;
+    width: 100%;
 }
 
 .innercontent {
