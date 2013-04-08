@@ -122,12 +122,11 @@ table.legend {
 }
 
 .legend p {
-    font-variant: small-caps;
     text-align: center;
     margin: 0 -.7em;
-    background: -moz-linear-gradient(#e8f0ff, #d0e0f8);
-    background: linear-gradient(#e8f0ff, #d0e0f8);
-    border-radius: 5px;
+    background: #f0f8ff;
+    border: 1px solid #80a0ff;
+    border-left-width: 4px;
 }
 
 td.legend {
@@ -166,7 +165,7 @@ h1 {
     }
 
     h1.namespace-heading .namespace {
-        color: black;
+        color: #114488;
         font-weight: bold;
     }
 
@@ -240,7 +239,7 @@ table {
     }
 
 ul.extra {
-    margin: .2em 0 0 1.5em;
+    margin: .2em 0 0 2.6em;
     padding: 0;
     list-style-type: none;
 }
@@ -277,6 +276,7 @@ b {
 .warning {
     font-size: 14pt;
     margin: 2em 2em;
-}";
+}
+";
     }
 }
