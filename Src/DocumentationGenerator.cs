@@ -30,7 +30,7 @@ namespace RT.DocGen
         {
             public Type Type;
             public XElement Documentation;
-            public SortedDictionary<string, memberInfo> Members;
+            public Dictionary<string, memberInfo> Members;
 
             internal string GetTypeLetters()
             {
@@ -93,21 +93,41 @@ namespace RT.DocGen
         private List<Tuple<string, string>> _assemblyLoadErrors = new List<Tuple<string, string>>();
         public List<Tuple<string, string>> AssemblyLoadErrors { get { return _assemblyLoadErrors; } }
 
-        private class memberComparer : IComparer<string>
+        private class memberComparer : IComparer<MemberInfo>
         {
-            public int Compare(string x, string y)
+            private memberComparer() { }
+            public static readonly memberComparer Instance = new memberComparer();
+
+            private char getTypeChar(MemberInfo member)
             {
-                var typeX = x[0];
-                var typeY = y[0];
-                if (typeX == 'M' && x.Contains(".#ctor")) typeX = 'C';
-                if (typeY == 'M' && y.Contains(".#ctor")) typeY = 'C';
+                switch (member.MemberType)
+                {
+                    case MemberTypes.Constructor: return 'C';
+                    case MemberTypes.Event: return 'E';
+                    case MemberTypes.Field: return 'F';
+                    case MemberTypes.Method: return _operators.Contains(member.Name) ? 'O' : 'M';
+                    case MemberTypes.NestedType: return 'T';
+                    case MemberTypes.Property: return 'P';
+                }
+                return 'X';
+            }
+
+            public int Compare(MemberInfo x, MemberInfo y)
+            {
+                var typeX = getTypeChar(x);
+                var typeY = getTypeChar(y);
 
                 if (typeX == typeY)
-                    return x.CompareTo(y);
+                {
+                    var res = x.Name.CompareTo(y.Name);
+                    if (res == 0 && "MO".Contains(typeX))
+                        return ((MethodInfo) x).GetParameters().Length.CompareTo(((MethodInfo) y).GetParameters().Length);
+                    return res;
+                }
 
-                foreach (var m in "CMEPF")
-                    if (typeX == m) return -1;
-                    else if (typeY == m) return 1;
+                foreach (var c in "CMOPEFTX")
+                    if (typeX == c) return -1;
+                    else if (typeY == c) return 1;
 
                 return 0;
             }
@@ -160,12 +180,13 @@ namespace RT.DocGen
                         foreach (var t in a.GetExportedTypes().Where(t => shouldTypeBeDisplayed(t)))
                         {
                             var typeFullName = getTypeFullName(t);
+                            var namespc = t.Namespace ?? "<no namespace>";
                             XElement doc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == typeFullName);
 
-                            if (!_namespaces.ContainsKey(t.Namespace))
-                                _namespaces[t.Namespace] = new namespaceInfo { Types = new SortedDictionary<string, typeInfo>() };
+                            if (!_namespaces.ContainsKey(namespc))
+                                _namespaces[namespc] = new namespaceInfo { Types = new SortedDictionary<string, typeInfo>() };
 
-                            var typeinfo = new typeInfo { Type = t, Documentation = doc, Members = new SortedDictionary<string, memberInfo>(new memberComparer()) };
+                            var typeinfo = new typeInfo { Type = t, Documentation = doc, Members = new Dictionary<string, memberInfo>() };
 
                             foreach (var mem in t.GetMembers(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
                                 .Where(m => m.DeclaringType == t && shouldMemberBeDisplayed(m)))
@@ -186,7 +207,7 @@ namespace RT.DocGen
                                 _members[dcmn] = memDoc;
                             }
 
-                            _namespaces[t.Namespace].Types[typeFullName] = typeinfo;
+                            _namespaces[namespc].Types[typeFullName] = typeinfo;
                             _types[typeFullName] = typeinfo;
                         }
                     }
@@ -405,12 +426,15 @@ namespace RT.DocGen
             }
         }
 
-        private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces = false, bool includeOuterTypes = false, bool variance = false, string baseUrl = null, bool inclRef = false, bool isOut = false, bool isThis = false, bool isParams = false, bool span = false, bool modifiers = false, bool namespaceSpan = false)
+        private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces = false, bool includeOuterTypes = false, bool variance = false, string baseUrl = null, bool inclRef = false, bool isOut = false, bool isThis = false, bool isParams = false, bool span = false, bool modifiers = false, bool namespaceSpan = false, Dictionary<Type, Type> subst = null)
         {
+            while (subst != null && subst.ContainsKey(t))
+                t = subst[t];
+
             if (span)
             {
                 yield return new SPAN { class_ = "type", title = stringSoup(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true)) }._(
-                    friendlyTypeName(t, includeNamespaces, includeOuterTypes, variance, baseUrl, inclRef, isOut, isThis, span: false, namespaceSpan: true)
+                    friendlyTypeName(t, includeNamespaces, includeOuterTypes, variance, baseUrl, inclRef, isOut, isThis, isParams, span: false, namespaceSpan: namespaceSpan, subst: subst)
                 );
                 yield break;
             }
@@ -430,14 +454,14 @@ namespace RT.DocGen
 
             if (t.IsArray)
             {
-                yield return friendlyTypeName(t.GetElementType(), includeNamespaces, includeOuterTypes, variance, span: span);
+                yield return friendlyTypeName(t.GetElementType(), includeNamespaces, includeOuterTypes, variance, span: span, namespaceSpan: namespaceSpan, subst: subst);
                 yield return "[]";
                 yield break;
             }
 
             if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))
             {
-                yield return friendlyTypeName(t.GetGenericArguments()[0], includeNamespaces, includeOuterTypes, variance, span: span);
+                yield return friendlyTypeName(t.GetGenericArguments()[0], includeNamespaces, includeOuterTypes, variance, span: span, namespaceSpan: namespaceSpan, subst: subst);
                 yield return "?";
                 yield break;
             }
@@ -479,7 +503,7 @@ namespace RT.DocGen
                 }
                 if (includeOuterTypes && t.IsNested && !t.IsGenericParameter)
                 {
-                    yield return friendlyTypeName(t.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: span);
+                    yield return friendlyTypeName(t.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: span, namespaceSpan: namespaceSpan, subst: subst);
                     yield return ".";
                 }
                 else if (includeNamespaces && !t.IsGenericParameter)
@@ -494,7 +518,7 @@ namespace RT.DocGen
 
                 string ret = t.IsGenericParameter ? t.Name : hasGenericTypeParameters ? t.Name.Remove(t.Name.IndexOf('`')) : t.Name;
                 if (baseUrl != null && !t.IsGenericParameter && _types.ContainsKey(getTypeFullName(t)))
-                    yield return new A(ret) { href = baseUrl + "/" + getTypeFullName(t).UrlEscape() };
+                    yield return new A { href = baseUrl + "/" + getTypeFullName(t).UrlEscape() }._(ret);
                 else
                     yield return ret;
 
@@ -508,38 +532,38 @@ namespace RT.DocGen
                     {
                         if (!first) yield return ", ";
                         first = false;
-                        yield return friendlyTypeName(ga, includeNamespaces, includeOuterTypes, variance, baseUrl, inclRef, span);
+                        yield return friendlyTypeName(ga, includeNamespaces, includeOuterTypes, variance, baseUrl, inclRef, span: span, namespaceSpan: namespaceSpan, subst: subst);
                     }
                     yield return ">";
                 }
             }
         }
 
-        private object friendlyMemberName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool namespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool stringOnly = false, bool modifiers = false)
+        private object friendlyMemberName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool namespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool stringOnly = false, bool modifiers = false, Dictionary<Type, Type> subst = null)
         {
             if (m.MemberType == MemberTypes.NestedType)
-                return friendlyTypeName((Type) m, includeNamespaces: namespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: !stringOnly, modifiers: modifiers);
+                return friendlyTypeName((Type) m, includeNamespaces: namespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: !stringOnly, modifiers: modifiers, subst: subst);
 
             if (m.MemberType == MemberTypes.Constructor || m.MemberType == MemberTypes.Method)
             {
-                var f = friendlyMethodName((MethodBase) m, returnType, containingType, parameterTypes, parameterNames, parameterDefaultValues, omitGenericTypeParameters, namespaces, variance, indent, url, baseUrl, stringOnly: stringOnly, modifiers: modifiers);
+                var f = friendlyMethodName((MethodBase) m, returnType, containingType, parameterTypes, parameterNames, parameterDefaultValues, omitGenericTypeParameters, namespaces, variance, indent, url, baseUrl, stringOnly: stringOnly, modifiers: modifiers, subst: subst);
                 return stringOnly ? (object) f : new SPAN { class_ = m.MemberType.ToString(), title = stringSoup(friendlyMemberName(m, true, true, true, true, true, stringOnly: true, modifiers: true)) }._(f);
             }
 
             var arr = Ut.NewArray<object>(
-                returnType && m.MemberType == MemberTypes.Property ? new object[] { friendlyTypeName(((PropertyInfo) m).PropertyType, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly), " " } :
-                returnType && m.MemberType == MemberTypes.Event ? new object[] { friendlyTypeName(((EventInfo) m).EventHandlerType, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly), " " } :
-                returnType && m.MemberType == MemberTypes.Field ? new object[] { friendlyTypeName(((FieldInfo) m).FieldType, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly), " " } : null,
-                containingType ? friendlyTypeName(m.DeclaringType, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly) : null,
+                returnType && m.MemberType == MemberTypes.Property ? new object[] { friendlyTypeName(((PropertyInfo) m).PropertyType, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly, subst: subst), " " } :
+                returnType && m.MemberType == MemberTypes.Event ? new object[] { friendlyTypeName(((EventInfo) m).EventHandlerType, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly, subst: subst), " " } :
+                returnType && m.MemberType == MemberTypes.Field ? new object[] { friendlyTypeName(((FieldInfo) m).FieldType, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly, subst: subst), " " } : null,
+                containingType ? friendlyTypeName(m.DeclaringType, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly, subst: subst) : null,
                 containingType ? "." : null,
                 m.MemberType == MemberTypes.Property
-                    ? (object) friendlyPropertyName((PropertyInfo) m, parameterTypes, parameterNames, namespaces, indent, url, baseUrl, stringOnly)
+                ? (object) friendlyPropertyName((PropertyInfo) m, parameterTypes, parameterNames, namespaces, indent, url, baseUrl, stringOnly, subst)
                     : stringOnly ? (object) m.Name : new STRONG { class_ = "member-name" }._(url == null ? (object) m.Name : new A { href = url }._(m.Name))
             );
             return stringOnly ? (object) stringSoup(arr) : new SPAN { class_ = m.MemberType.ToString(), title = stringSoup(friendlyMemberName(m, true, true, true, true, true, stringOnly: true)) }._(arr);
         }
 
-        private IEnumerable<object> friendlyMethodName(MethodBase m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool includeNamespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool isDelegate = false, bool stringOnly = false, bool modifiers = false)
+        private IEnumerable<object> friendlyMethodName(MethodBase m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool includeNamespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool isDelegate = false, bool stringOnly = false, bool modifiers = false, Dictionary<Type, Type> subst = null)
         {
             if (isDelegate)
                 yield return "delegate ";
@@ -570,24 +594,24 @@ namespace RT.DocGen
                 // For the cast operators, omit the return type because they later become part of the operator name
                 if (meth.Name != "op_Implicit" && meth.Name != "op_Explicit")
                 {
-                    yield return friendlyTypeName(meth.ReturnType, includeNamespaces: includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly);
+                    yield return friendlyTypeName(meth.ReturnType, includeNamespaces: includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly, subst: subst);
                     yield return " ";
                 }
             }
             if ((m.MemberType == MemberTypes.Constructor || isDelegate) && url != null)
-                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: false) : new STRONG { class_ = "member-name" }._(new A { href = url }._(friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: true)));
+                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: false, subst: subst) : new STRONG { class_ = "member-name" }._(new A { href = url }._(friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: isDelegate, span: true, subst: subst)));
             else if (isDelegate)
-                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance) : new STRONG { class_ = "member-name" }._(friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: true));
+                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, subst: subst) : new STRONG { class_ = "member-name" }._(friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: true, subst: subst));
             else if (containingType)
-                yield return friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly);
+                yield return friendlyTypeName(m.DeclaringType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly, subst: subst);
             else if (m.MemberType == MemberTypes.Constructor)
-                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces) : new STRONG { class_ = "member-name" }._(friendlyTypeName(m.DeclaringType, includeNamespaces, baseUrl: baseUrl, span: true));
+                yield return stringOnly ? (object) friendlyTypeName(m.DeclaringType, includeNamespaces, subst: subst) : new STRONG { class_ = "member-name" }._(friendlyTypeName(m.DeclaringType, includeNamespaces, baseUrl: baseUrl, span: true, subst: subst));
             if (!stringOnly && !indent && (m.IsGenericMethod || (parameterNames && m.GetParameters().Any()))) yield return new WBR();
             if (m.MemberType != MemberTypes.Constructor && !isDelegate)
             {
                 if (containingType) yield return ".";
-                object f = cSharpCompatibleMethodName(m.Name, friendlyTypeName(((MethodInfo) m).ReturnType, includeOuterTypes: true, span: !stringOnly));
-                if (url != null) f = new A(f) { href = url };
+                object f = cSharpCompatibleMethodName(m.Name, friendlyTypeName(((MethodInfo) m).ReturnType, includeOuterTypes: true, span: !stringOnly, subst: subst));
+                if (url != null) f = new A { href = url }._(f);
                 if (!stringOnly) f = new STRONG { class_ = "member-name" }._(f);
                 yield return f;
             }
@@ -605,7 +629,7 @@ namespace RT.DocGen
                 {
                     if (!first) yield return indent ? ",\n    " : ", ";
                     var f = Ut.NewArray<object>(
-                        parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: !p.IsOut, isOut: first && m.IsDefined<ExtensionAttribute>(), isThis: p.IsDefined<ParamArrayAttribute>(), isParams: p.IsDefined<ParamArrayAttribute>(), span: !stringOnly) : null,
+                        parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: true, isOut: p.IsOut, isThis: first && m.IsDefined<ExtensionAttribute>(), isParams: p.IsDefined<ParamArrayAttribute>(), span: !stringOnly, subst: subst) : null,
                         parameterTypes && parameterNames ? " " : null,
                         parameterNames ? (stringOnly || !parameterTypes ? (object) p.Name : new STRONG(p.Name)) : null,
                         parameterDefaultValues && p.Attributes.HasFlag(ParameterAttributes.HasDefault) ? friendlyDefaultValue(p.DefaultValue, baseUrl, stringOnly) : null
@@ -644,6 +668,14 @@ namespace RT.DocGen
             else
                 yield return val.ToString();
         }
+
+        private static string[] _operators = Ut.NewArray(
+            "op_Implicit", "op_Explicit",
+            "op_UnaryPlus", "op_Addition", "op_UnaryNegation", "op_Subtraction",
+            "op_LogicalNot", "op_OnesComplement", "op_Increment", "op_Decrement", "op_True", "op_False",
+            "op_Multiply", "op_Division", "op_Modulus", "op_BitwiseAnd", "op_BitwiseOr", "op_ExclusiveOr", "op_LeftShift", "op_RightShift",
+            "op_Equality", "op_Inequality", "op_LessThan", "op_GreaterThan", "op_LessThanOrEqual", "op_GreaterThanOrEqual"
+        );
 
         private object cSharpCompatibleMethodName(string methodName, object returnType)
         {
@@ -685,7 +717,7 @@ namespace RT.DocGen
             }
         }
 
-        private IEnumerable<object> friendlyPropertyName(PropertyInfo property, bool parameterTypes, bool parameterNames, bool includeNamespaces, bool indent, string url, string baseUrl, bool stringOnly)
+        private IEnumerable<object> friendlyPropertyName(PropertyInfo property, bool parameterTypes, bool parameterNames, bool includeNamespaces, bool indent, string url, string baseUrl, bool stringOnly, Dictionary<Type, Type> subst)
         {
             var prms = property.GetIndexParameters();
             if (prms.Length > 0)
@@ -700,7 +732,7 @@ namespace RT.DocGen
                     first = false;
                     var arr = Ut.NewArray<object>(
                         parameterTypes && p.IsOut ? "out " : null,
-                        parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: !p.IsOut, span: !stringOnly) : null,
+                        parameterTypes ? friendlyTypeName(p.ParameterType, includeNamespaces, includeOuterTypes: true, baseUrl: baseUrl, inclRef: !p.IsOut, span: !stringOnly, subst: subst) : null,
                         parameterTypes && parameterNames ? " " : null,
                         parameterNames ? (stringOnly ? (object) p.Name : new STRONG(p.Name)) : null
                     );
@@ -903,7 +935,7 @@ namespace RT.DocGen
                     return ((FieldInfo) member).IsPublic;
 
                 case MemberTypes.NestedType:
-                    return ((Type) member).IsPublic || ((Type) member).IsNestedPublic;
+                    return ((Type) member).IsNestedPublic;
 
                 case MemberTypes.Property:
                     var property = (PropertyInfo) member;
@@ -939,15 +971,17 @@ namespace RT.DocGen
             if (typeinfo.Type == selectedMember) cssClass += " highlighted";
             return new DIV { class_ = "type indent" }._(new DIV { class_ = cssClass }._(friendlyTypeName(typeinfo.Type, span: true, baseUrl: req.Url.WithPathOnly("").ToHref())),
                 selectedMember != null && !typeof(Delegate).IsAssignableFrom(typeinfo.Type) && isMemberInside(selectedMember, typeinfo.Type)
-                    ? typeinfo.Members.Where(mkvp => isPublic(mkvp.Value.Member)).Select(mkvp =>
-                    {
-                        if (mkvp.Value.Member.MemberType == MemberTypes.NestedType)
-                            return generateTypeBullet(getTypeFullName((Type) mkvp.Value.Member), selectedMember, req);
-                        string css = mkvp.Value.Member.MemberType.ToString() + " member indent";
-                        if (mkvp.Value.Documentation == null) css += " missing";
-                        if (mkvp.Value.Member == selectedMember) css += " highlighted";
-                        return new DIV { class_ = css }._(friendlyMemberName(mkvp.Value.Member, parameterNames: true, omitGenericTypeParameters: true, baseUrl: req.Url.WithPathOnly("").ToHref(), url: req.Url.WithPathOnly("/" + mkvp.Key.UrlEscape()).ToHref()));
-                    })
+                    ? typeinfo.Members.Where(mkvp => isPublic(mkvp.Value.Member))
+                        .OrderBy(mkvp => mkvp.Value.Member, memberComparer.Instance)
+                        .Select(mkvp =>
+                        {
+                            if (mkvp.Value.Member.MemberType == MemberTypes.NestedType)
+                                return generateTypeBullet(getTypeFullName((Type) mkvp.Value.Member), selectedMember, req);
+                            string css = mkvp.Value.Member.MemberType.ToString() + " member indent";
+                            if (mkvp.Value.Documentation == null) css += " missing";
+                            if (mkvp.Value.Member == selectedMember) css += " highlighted";
+                            return new DIV { class_ = css }._(friendlyMemberName(mkvp.Value.Member, parameterNames: true, omitGenericTypeParameters: true, baseUrl: req.Url.WithPathOnly("").ToHref(), url: req.Url.WithPathOnly("/" + mkvp.Key.UrlEscape()).ToHref()));
+                        })
                     : null
             );
         }
@@ -1012,8 +1046,8 @@ namespace RT.DocGen
         private IEnumerable<object> generateMemberDocumentationInner(HttpRequest req, MemberInfo member, XElement documentation)
         {
             yield return new UL(
-                new LI("Declared in: ", friendlyTypeName(member.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true)),
-                formatMemberExtraInfoItems(req, member, true)
+                new LI("Declared in: ", friendlyTypeName(member.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true, namespaceSpan: true)),
+                formatMemberExtraInfoItems(req, member, true, null, null)
             );
             yield return new H2("Declaration");
             yield return new PRE(friendlyMemberName(member, returnType: true, parameterTypes: true, parameterNames: true, parameterDefaultValues: true, variance: true, indent: true, modifiers: true, baseUrl: req.Url.WithPathOnly("").ToHref()));
@@ -1078,9 +1112,9 @@ namespace RT.DocGen
 
             yield return new H1(
                 type.IsNested
-                    ? (isDelegate ? "Nested delegate: " : type.IsEnum ? "Nested enum: " : type.IsValueType ? "Nested struct: " : type.IsInterface ? "Nested interface: " : (type.IsAbstract && type.IsSealed) ? "Nested static class: " : type.IsAbstract ? "Nested abstract class: " : "Nested class: ")
-                    : (isDelegate ? "Delegate: " : type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : type.IsInterface ? "Interface: " : (type.IsAbstract && type.IsSealed) ? "Static class: " : type.IsAbstract ? "Abstract class: " : "Class: "),
-                friendlyTypeName(type, includeNamespaces: true, includeOuterTypes: true, variance: true, span: true)
+                    ? (isDelegate ? "Nested delegate: " : type.IsEnum ? "Nested enum: " : type.IsValueType ? "Nested struct: " : type.IsInterface ? "Nested interface: " : (type.IsAbstract && type.IsSealed) ? "Nested static class: " : type.IsAbstract ? "Nested abstract class: " : type.IsSealed ? "Nested sealed class: " : "Nested class: ")
+                    : (isDelegate ? "Delegate: " : type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : type.IsInterface ? "Interface: " : (type.IsAbstract && type.IsSealed) ? "Static class: " : type.IsAbstract ? "Abstract class: " : type.IsSealed ? "Sealed class: " : "Class: "),
+                friendlyTypeName(type, includeNamespaces: true, includeOuterTypes: true, variance: true, span: true, namespaceSpan: true)
             );
 
             yield return new DIV { class_ = "innercontent" }._(generateTypeDocumentationInner(req, type, documentation));
@@ -1093,19 +1127,19 @@ namespace RT.DocGen
             yield return new UL { class_ = "typeinfo" }._(
                 new LI("Assembly: ", new SPAN { class_ = "assembly" }._(type.Assembly.FullName)),
                 new LI("Namespace: ", new A { class_ = "namespace", href = req.Url.WithPathOnly("/" + type.Namespace.UrlEscape()).ToHref() }._(type.Namespace)),
-                type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true)) : null,
+                type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true, namespaceSpan: true)) : null,
                 inheritsFrom(type, req),
                 implementsInterfaces(type, req),
                 type.IsInterface ? implementedBy(type, req) : derivedTypes(type, req),
                 type.IsEnum ? new LI("Underlying integer type: ", type.GetEnumUnderlyingType().FullName) : null
             );
 
-            MethodInfo m = null;
+            MethodInfo delegateInvokeMethod = null;
             if (isDelegate)
             {
-                m = type.GetMethod("Invoke");
+                delegateInvokeMethod = type.GetMethod("Invoke");
                 yield return new H2("Declaration");
-                yield return new PRE(friendlyMethodName(m, returnType: true, parameterTypes: true, parameterNames: true, includeNamespaces: true, variance: true, indent: true, baseUrl: req.Url.WithPathOnly("").ToHref(), isDelegate: true));
+                yield return new PRE(friendlyMethodName(delegateInvokeMethod, returnType: true, parameterTypes: true, parameterNames: true, includeNamespaces: true, variance: true, indent: true, baseUrl: req.Url.WithPathOnly("").ToHref(), isDelegate: true));
             }
 
             if (documentation == null)
@@ -1121,8 +1155,8 @@ namespace RT.DocGen
 
                 if (isDelegate)
                 {
-                    if (m.GetParameters().Any())
-                        yield return generateParameterDocumentation(req, m, documentation);
+                    if (delegateInvokeMethod.GetParameters().Any())
+                        yield return generateParameterDocumentation(req, delegateInvokeMethod, documentation);
 
                     var returns = documentation.Element("returns");
                     if (returns != null)
@@ -1155,20 +1189,27 @@ namespace RT.DocGen
 
             if (!isDelegate)
             {
-                foreach (var group in _types[getTypeFullName(type)].Members.Where(kvp => isPublic(kvp.Value.Member)).GroupBy(kvp => new
-                {
-                    MemberType = kvp.Value.Member.MemberType,
-                    IsStatic = isStatic(kvp.Value.Member)
-                }))
+                foreach (var group in new { Type = type, Substitutions = new Dictionary<Type, Type>() }
+                    .SelectChain(ti => ti.Type.BaseType.NullOr(bt => bt.IsGenericType
+                        ? new { Type = bt.GetGenericTypeDefinition(), Substitutions = ti.Substitutions.Concat(bt.GetGenericTypeDefinition().GetGenericArguments().Select((ga, gai) => Ut.KeyValuePair(ga, bt.GetGenericArguments()[gai]))).ToDictionary() }
+                        : new { Type = bt, Substitutions = new Dictionary<Type, Type>() }))
+                    .Where(ti => _types.ContainsKey(getTypeFullName(ti.Type)))
+                    .SelectMany(ti => _types[getTypeFullName(ti.Type)].Members.Select(m => new { InheritedFrom = ti.Type, Substitutions = ti.Substitutions, MemberName = m.Key, Member = m.Value.Member, Documentation = m.Value.Documentation }))
+                    .Where(inf => isPublic(inf.Member) && (inf.InheritedFrom == type || inf.Member.MemberType != MemberTypes.Constructor))
+                    .GroupBy(mbr => mbr.Member.IfType((MethodInfo m) => m.GetBaseDefinition(), (PropertyInfo p) => p.GetBaseDefinition(), (EventInfo e) => e.GetBaseDefinition(), m => m))
+                    .Select(g => g.First())
+                    .OrderBy(inf => inf.Member, memberComparer.Instance)
+                    .GroupBy(inf => new { MemberType = inf.Member.MemberType, IsStatic = isStatic(inf.Member), IsOperator = inf.Member.MemberType == MemberTypes.Method && _operators.Contains(inf.Member.Name) }))
                 {
                     var isEnumValues = group.Key.MemberType == MemberTypes.Field && group.Key.IsStatic && type.IsEnum;
 
                     yield return new H2(
                         group.Key.MemberType == MemberTypes.Constructor ? "Constructors" :
                         group.Key.MemberType == MemberTypes.Event ? "Events" :
-                        isEnumValues ? "Enumeration values" :
+                        isEnumValues ? "Enum values" :
                         group.Key.MemberType == MemberTypes.Field && group.Key.IsStatic ? "Static fields" :
                         group.Key.MemberType == MemberTypes.Field ? "Instance fields" :
+                        group.Key.IsOperator ? "Operators" :
                         group.Key.MemberType == MemberTypes.Method && group.Key.IsStatic ? "Static methods" :
                         group.Key.MemberType == MemberTypes.Method ? "Instance methods" :
                         group.Key.MemberType == MemberTypes.Property && group.Key.IsStatic ? "Static properties" :
@@ -1176,38 +1217,36 @@ namespace RT.DocGen
                         group.Key.MemberType == MemberTypes.NestedType ? "Nested types" : "Additional members"
                     );
 
-                    yield return new TABLE { class_ = "doclist" }._(Ut.Lambda(() =>
-                    {
-                        // Group members with the same documentation
-                        return group.GroupConsecutive((k1, k2) => summaryIsMergable(k1.Value.Documentation, k2.Value.Documentation))
-                            .SelectMany(gr => gr.Select((kvp, i) => new TR(
-                                kvp.Value.Member.MemberType == MemberTypes.Constructor || kvp.Value.Member.MemberType == MemberTypes.NestedType || isEnumValues ? null :
-                                    new TD { class_ = "membertype" }._(
-                                        friendlyTypeName(
-                                            kvp.Value.Member is EventInfo ? ((EventInfo) kvp.Value.Member).EventHandlerType :
-                                            kvp.Value.Member is FieldInfo ? ((FieldInfo) kvp.Value.Member).FieldType :
-                                            kvp.Value.Member is MethodInfo ? ((MethodInfo) kvp.Value.Member).ReturnType :
-                                            kvp.Value.Member is PropertyInfo ? ((PropertyInfo) kvp.Value.Member).PropertyType : null,
-                                            includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true
-                                        )
-                                    ),
-                                new TD { class_ = "member" }._(
-                                    new DIV { class_ = "withicon " + (kvp.Value.Member.MemberType == MemberTypes.NestedType ? _types[kvp.Key].GetTypeCssClass() : kvp.Value.Member.MemberType.ToString()) }._(
-                                        friendlyMemberName(kvp.Value.Member, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + kvp.Key.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref())
-                                    ),
-                                    formatMemberExtraInfo(req, kvp.Value.Member, false)
+                    yield return new TABLE { class_ = "doclist" }._(group
+                        .GroupConsecutive((inf1, inf2) => summaryIsMergable(inf1.Documentation, inf2.Documentation))
+                        .SelectMany(gr => gr.Select((inf, index) => new TR(
+                            inf.Member.MemberType == MemberTypes.Constructor || inf.Member.MemberType == MemberTypes.NestedType || isEnumValues ? null :
+                                new TD { class_ = "membertype" }._(
+                                    friendlyTypeName(
+                                        inf.Member is EventInfo ? ((EventInfo) inf.Member).EventHandlerType :
+                                        inf.Member is FieldInfo ? ((FieldInfo) inf.Member).FieldType :
+                                        inf.Member is MethodInfo ? ((MethodInfo) inf.Member).ReturnType :
+                                        inf.Member is PropertyInfo ? ((PropertyInfo) inf.Member).PropertyType : null,
+                                        includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true, subst: inf.Substitutions
+                                    )
                                 ),
-                                isEnumValues ? new TD { class_ = "numeric" }._("{0:X}".Fmt(((FieldInfo) kvp.Value.Member).GetRawConstantValue())) : null,
-                                i > 0 ? null : new TD { class_ = "documentation", rowspan = gr.Count }._(
-                                    kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
-                                        ? (object) new EM(gr.Count > 1 ? "These members are not documented." : "This member is not documented.")
-                                        : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req),
-                                    kvp.Value.Documentation == null || kvp.Value.Documentation.Element("remarks") == null
-                                        ? null
-                                        : new object[] { " ", new SPAN { class_ = "extra" }._("(see also remarks)") }
-                                )
-                            )));
-                    }));
+                            new TD { class_ = "member" }._(
+                                new DIV { class_ = "withicon " + (inf.Member.MemberType == MemberTypes.NestedType ? _types[inf.MemberName].GetTypeCssClass() : inf.Member.MemberType.ToString()) }._(
+                                    friendlyMemberName(inf.Member, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + inf.MemberName.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref(), subst: inf.Substitutions)
+                                ),
+                                formatMemberExtraInfo(req, inf.Member, false, inf.InheritedFrom == type ? null : inf.InheritedFrom, inf.Substitutions)
+                            ),
+                            isEnumValues ? new TD { class_ = "numeric" }._(((FieldInfo) inf.Member).GetRawConstantValue()) : null,
+                            index > 0 ? null : new TD { class_ = "documentation", rowspan = gr.Count }._(
+                                inf.Documentation == null || inf.Documentation.Element("summary") == null
+                                    ? (object) new EM(gr.Count > 1 ? "These members are not documented." : "This member is not documented.")
+                                    : interpretNodes(inf.Documentation.Element("summary").Nodes(), req),
+                                inf.Documentation == null || inf.Documentation.Element("remarks") == null
+                                    ? null
+                                    : new object[] { " ", new SPAN { class_ = "extra" }._("(see also remarks)") }
+                            )
+                        )))
+                    );
                 }
             }
         }
@@ -1222,7 +1261,7 @@ namespace RT.DocGen
                         .FirstOrDefault(xe => xe.Attribute("name") != null && xe.Attribute("name").Value == pi.Name);
                     return new TR(
                         new TD { class_ = "membertype" }._(
-                            friendlyTypeName(pi.ParameterType, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), inclRef: !pi.IsOut, isOut: pi.IsOut, isThis: index == 0 && method.IsDefined<ExtensionAttribute>(), span: true)
+                            friendlyTypeName(pi.ParameterType, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), inclRef: true, isOut: pi.IsOut, isThis: index == 0 && method.IsDefined<ExtensionAttribute>(), span: true)
                         ),
                         new TD { class_ = "member" }._(
                             new STRONG { class_ = "member-name parameter" }._(pi.Name)
@@ -1253,15 +1292,20 @@ namespace RT.DocGen
             return XNode.DeepEquals(doc1.Element("summary"), doc2.Element("summary"));
         }
 
-        private IEnumerable<object> formatMemberExtraInfo(HttpRequest req, MemberInfo member, bool markInterfaceMethods)
+        private IEnumerable<object> formatMemberExtraInfo(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst)
         {
-            var listItems = formatMemberExtraInfoItems(req, member, markInterfaceMethods).ToList();
+            var listItems = formatMemberExtraInfoItems(req, member, markInterfaceMethods, inheritedFrom, subst).ToList();
             if (listItems.Count > 0)
                 yield return new UL { class_ = "extra" }._(listItems);
         }
 
-        private IEnumerable<object> formatMemberExtraInfoItems(HttpRequest req, MemberInfo member, bool markInterfaceMethods)
+        private IEnumerable<object> formatMemberExtraInfoItems(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst)
         {
+            string baseUrl = req.Url.WithPathOnly("").ToHref();
+
+            if (inheritedFrom != null)
+                yield return new LI("Inherited from ", friendlyTypeName(inheritedFrom, includeOuterTypes: true, baseUrl: baseUrl, span: true, subst: subst));
+
             var method = member as MethodInfo;
             if (method == null)
             {
@@ -1298,7 +1342,7 @@ namespace RT.DocGen
                 bool showVirtual = true;
                 if (baseDefinition != member)
                 {
-                    string url = null, baseUrl = req.Url.WithPathOnly("").ToHref();
+                    string url = null;
                     var dcmn = documentationCompatibleMemberName(baseDefinition);
                     if (_members.ContainsKey(dcmn))
                         url = req.Url.WithPathOnly("/" + dcmn.UrlEscape()).ToHref();
@@ -1314,7 +1358,7 @@ namespace RT.DocGen
                     var index = map.TargetMethods.IndexOf(method);
                     if (index != -1)
                     {
-                        string url = null, baseUrl = baseUrl = req.Url.WithPathOnly("").ToHref();
+                        string url = null;
                         var interfaceMember =
                             (MemberInfo) interf.GetProperties().FirstOrDefault(p => p.GetGetMethod() == map.InterfaceMethods[index] || p.GetSetMethod() == map.InterfaceMethods[index]) ??
                             (MemberInfo) interf.GetEvents().FirstOrDefault(e => e.GetAddMethod() == map.InterfaceMethods[index] || e.GetRemoveMethod() == map.InterfaceMethods[index]) ??

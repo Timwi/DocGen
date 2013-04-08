@@ -39,6 +39,7 @@
     <Compile Include="CssSky.cs" />
     <Compile Include="DocumentationGenerator.cs">
     </Compile>
+    <Compile Include="Extensions.cs" />
     <Compile Include="PropellerModule.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
