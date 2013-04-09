@@ -1065,6 +1065,8 @@ namespace RT.DocGen
             if (member.MemberType == MemberTypes.Constructor || member.MemberType == MemberTypes.Method)
             {
                 var method = (MethodBase) member;
+                if (method.IsGenericMethod)
+                    yield return generateGenericTypeParameterTable(req, documentation, method.GetGenericArguments());
                 if (method.GetParameters().Any())
                     yield return generateParameterDocumentation(req, method, documentation);
             }
@@ -1101,9 +1103,6 @@ namespace RT.DocGen
                     yield return new UL(seealsos.Select(sa => new LI(interpretCref(sa.Attribute("cref").Value, req, true))));
                 }
             }
-
-            if (member.MemberType == MemberTypes.Method && ((MethodBase) member).IsGenericMethod)
-                yield return generateGenericTypeParameterTable(req, documentation, ((MethodBase) member).GetGenericArguments());
         }
 
         private IEnumerable<object> generateTypeDocumentation(HttpRequest req, Type type, XElement documentation)
