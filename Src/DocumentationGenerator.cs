@@ -93,6 +93,8 @@ namespace RT.DocGen
         private List<Tuple<string, string>> _assemblyLoadErrors = new List<Tuple<string, string>>();
         public List<Tuple<string, string>> AssemblyLoadErrors { get { return _assemblyLoadErrors; } }
 
+        private const string NoNamespaceName = "<no namespace>";
+
         private class memberComparer : IComparer<MemberInfo>
         {
             private memberComparer() { }
@@ -180,7 +182,7 @@ namespace RT.DocGen
                         foreach (var t in a.GetExportedTypes().Where(t => shouldTypeBeDisplayed(t)))
                         {
                             var typeFullName = getTypeFullName(t);
-                            var namespc = t.Namespace ?? "<no namespace>";
+                            var namespc = t.Namespace ?? NoNamespaceName;
                             XElement doc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == typeFullName);
 
                             if (!_namespaces.ContainsKey(namespc))
@@ -233,7 +235,7 @@ namespace RT.DocGen
         public HttpResponse Handler(HttpRequest request)
         {
             if (_authenticator == null && _usernamePasswordFile != null)
-                _authenticator = new Authenticator(_usernamePasswordFile, request.Url.WithPathOnly("/").ToHref(), "the documentation");
+                _authenticator = new Authenticator(_usernamePasswordFile, url => url.WithPathOnly("/").ToHref(), "the documentation");
 
             if (_resolver == null)
             {
@@ -290,7 +292,7 @@ namespace RT.DocGen
                 else if (_types.ContainsKey(token))
                 {
                     type = _types[token].Type;
-                    ns = type.Namespace;
+                    ns = type.Namespace ?? NoNamespaceName;
                     title = type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : type.IsInterface ? "Interface: " : typeof(Delegate).IsAssignableFrom(type) ? "Delegate: " : "Class: ";
                     title += stringSoup(friendlyTypeName(type, includeOuterTypes: true));
                     content = generateTypeDocumentation(req, _types[token].Type, _types[token].Documentation);
@@ -508,7 +510,7 @@ namespace RT.DocGen
                 }
                 else if (includeNamespaces && !t.IsGenericParameter)
                 {
-                    var arr = new object[] { t.Namespace, "." };
+                    var arr = t.Namespace.NullOr(ns => new object[] { ns, "." });
                     yield return namespaceSpan ? new SPAN { class_ = "namespace" }._(arr) : (object) arr;
                 }
 
@@ -1125,7 +1127,7 @@ namespace RT.DocGen
 
             yield return new UL { class_ = "typeinfo" }._(
                 new LI("Assembly: ", new SPAN { class_ = "assembly" }._(type.Assembly.FullName)),
-                new LI("Namespace: ", new A { class_ = "namespace", href = req.Url.WithPathOnly("/" + type.Namespace.UrlEscape()).ToHref() }._(type.Namespace)),
+                new LI("Namespace: ", new A { class_ = "namespace", href = req.Url.WithPathOnly("/" + (type.Namespace ?? NoNamespaceName).UrlEscape()).ToHref() }._(type.Namespace)),
                 type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true, namespaceSpan: true)) : null,
                 inheritsFrom(type, req),
                 implementsInterfaces(type, req),
