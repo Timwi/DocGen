@@ -430,8 +430,9 @@ namespace RT.DocGen
 
         private IEnumerable<object> friendlyTypeName(Type t, bool includeNamespaces = false, bool includeOuterTypes = false, bool variance = false, string baseUrl = null, bool inclRef = false, bool isOut = false, bool isThis = false, bool isParams = false, bool span = false, bool modifiers = false, bool namespaceSpan = false, Dictionary<Type, Type> subst = null)
         {
-            while (subst != null && subst.ContainsKey(t))
-                t = subst[t];
+            if (subst != null)
+                while (subst.ContainsKey(t))
+                    t = subst[t];
 
             if (span)
             {
@@ -773,45 +774,58 @@ namespace RT.DocGen
             return !t.IsNested || !t.IsNestedPrivate;
         }
 
-        private string documentationCompatibleMemberName(MemberInfo m)
+        private string documentationCompatibleMemberName(MemberInfo m, Type reflectedType = null, Dictionary<Type, Type> genericSubstitutionsForHidingDetection = null)
         {
             StringBuilder sb = new StringBuilder();
             if (m.MemberType == MemberTypes.Method || m.MemberType == MemberTypes.Constructor)
             {
                 MethodBase mi = m as MethodBase;
                 sb.Append("M:");
-                var declaringType = mi.DeclaringType;
-                if (declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition)
-                    declaringType = declaringType.GetGenericTypeDefinition();
-                sb.Append(declaringType.FullName.Replace("+", "."));
-                sb.Append(m.MemberType == MemberTypes.Method ? "." + mi.Name : ".#ctor");
+                if (genericSubstitutionsForHidingDetection == null)
+                {
+                    var declaringType = mi.DeclaringType;
+                    if (declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition)
+                        declaringType = declaringType.GetGenericTypeDefinition();
+                    sb.Append(declaringType.FullName.Replace("+", "."));
+                    sb.Append(".");
+                }
+                sb.Append(m.MemberType == MemberTypes.Method ? mi.Name : "#ctor");
                 if (mi.IsGenericMethod)
                 {
                     sb.Append("``");
                     sb.Append(mi.GetGenericArguments().Count());
                 }
-                appendParameterTypes(sb, mi.GetParameters(), mi.ReflectedType, mi as MethodInfo);
+                appendParameterTypes(sb, mi.GetParameters(), reflectedType ?? mi.ReflectedType, mi as MethodInfo, genericSubstitutionsForHidingDetection);
             }
             else if (m.MemberType == MemberTypes.Field || m.MemberType == MemberTypes.Event)
             {
                 sb.Append(m.MemberType == MemberTypes.Field ? "F:" : "E:");
-                sb.Append(m.DeclaringType.FullName.Replace("+", "."));
-                sb.Append(".");
+                if (genericSubstitutionsForHidingDetection == null)
+                {
+                    sb.Append(m.DeclaringType.FullName.Replace("+", "."));
+                    sb.Append(".");
+                }
                 sb.Append(m.Name);
             }
             else if (m.MemberType == MemberTypes.Property)
             {
                 var prop = (PropertyInfo) m;
                 sb.Append("P:");
-                sb.Append(prop.DeclaringType.FullName.Replace("+", "."));
-                sb.Append(".");
+                if (genericSubstitutionsForHidingDetection == null)
+                {
+                    sb.Append(prop.DeclaringType.FullName.Replace("+", "."));
+                    sb.Append(".");
+                }
                 sb.Append(prop.Name);
                 if (m.MemberType == MemberTypes.Property && prop.GetIndexParameters().Length > 0)
                     appendParameterTypes(sb, prop.GetIndexParameters(), prop.ReflectedType);
             }
             else if (m.MemberType == MemberTypes.NestedType)
             {
-                sb.Append(getTypeFullName((Type) m));
+                if (genericSubstitutionsForHidingDetection == null)
+                    sb.Append(getTypeFullName((Type) m));
+                else
+                    sb.Append(m.Name);
             }
             else
             {
@@ -823,36 +837,40 @@ namespace RT.DocGen
             if (m is MethodInfo && (m.Name == "op_Implicit" || m.Name == "op_Explicit"))
             {
                 var b = (MethodInfo) m;
-                sb.Append("~" + stringifyParameterType(b.ReturnType, b.ReflectedType, b));
+                sb.Append("~" + stringifyParameterType(b.ReturnType, b.ReflectedType, b, genericSubstitutionsForHidingDetection));
             }
             return sb.ToString();
         }
 
-        private void appendParameterTypes(StringBuilder sb, ParameterInfo[] parameters, Type type, MethodInfo method = null)
+        private void appendParameterTypes(StringBuilder sb, ParameterInfo[] parameters, Type type, MethodInfo method = null, Dictionary<Type, Type> genericSubstitutions = null)
         {
             bool first = true;
             foreach (var param in parameters)
             {
                 sb.Append(first ? "(" : ",");
                 first = false;
-                sb.Append(stringifyParameterType(param.ParameterType, type, method));
+                sb.Append(stringifyParameterType(param.ParameterType, type, method, genericSubstitutions));
             }
             if (!first) sb.Append(")");
         }
 
-        private string stringifyParameterType(Type parameterType, Type type, MethodInfo method)
+        private string stringifyParameterType(Type parameterType, Type type, MethodInfo method, Dictionary<Type, Type> genericSubstitutions)
         {
             if (parameterType.IsByRef)
-                return stringifyParameterType(parameterType.GetElementType(), type, method) + "@";
+                return stringifyParameterType(parameterType.GetElementType(), type, method, genericSubstitutions) + "@";
 
             if (parameterType.IsArray)
-                return stringifyParameterType(parameterType.GetElementType(), type, method) + "[]";
+                return stringifyParameterType(parameterType.GetElementType(), type, method, genericSubstitutions) + "[]";
 
             if (!parameterType.IsGenericType && !parameterType.IsGenericParameter)
                 return parameterType.FullName.Replace("+", ".");
 
             if (parameterType.IsGenericParameter)
             {
+                Type output;
+                if (genericSubstitutions != null && genericSubstitutions.TryGetValue(parameterType, out output))
+                    return stringifyParameterType(output, type, method, genericSubstitutions);
+
                 int i = 0;
                 if (method != null && method.IsGenericMethodDefinition)
                 {
@@ -873,7 +891,7 @@ namespace RT.DocGen
                         i++;
                     }
                 }
-                throw new Exception("Parameter type is a generic type, but its generic argument is neither in the class nor method definition.");
+                throw new InternalErrorException("Parameter type is a generic type, but its generic argument is neither in the type nor method definition.");
             }
 
             if (parameterType.IsGenericType)
@@ -885,14 +903,14 @@ namespace RT.DocGen
                 while ((m = Regex.Match(fullName, @"`(\d+)")).Success)
                 {
                     int num = int.Parse(m.Groups[1].Value);
-                    constructName += fullName.Substring(0, m.Index) + "{" + genericArguments.Take(num).Select(g => stringifyParameterType(g, type, method)).JoinString(",") + "}";
+                    constructName += fullName.Substring(0, m.Index) + "{" + genericArguments.Take(num).Select(g => stringifyParameterType(g, type, method, genericSubstitutions)).JoinString(",") + "}";
                     fullName = fullName.Substring(m.Index + m.Length);
                     genericArguments = genericArguments.Skip(num);
                 }
                 return constructName + fullName;
             }
 
-            throw new Exception("I totally don't know what to do with this parameter type.");
+            throw new InternalErrorException("I totally don't know what to do with this parameter type.");
         }
 
         private bool isPropertyGetterOrSetter(MemberInfo member)
@@ -1049,7 +1067,7 @@ namespace RT.DocGen
         {
             yield return new UL(
                 new LI("Declared in: ", friendlyTypeName(member.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true, namespaceSpan: true)),
-                formatMemberExtraInfoItems(req, member, true, null, null)
+                formatMemberExtraInfoItems(req, member, true, null, null, null)
             );
             yield return new H2("Declaration");
             yield return new PRE(friendlyMemberName(member, returnType: true, parameterTypes: true, parameterNames: true, parameterDefaultValues: true, variance: true, indent: true, modifiers: true, baseUrl: req.Url.WithPathOnly("").ToHref()));
@@ -1191,15 +1209,26 @@ namespace RT.DocGen
             if (!isDelegate)
             {
                 foreach (var group in new { Type = type, Substitutions = new Dictionary<Type, Type>() }
+                    // Find all the base types with their generic type parameters
                     .SelectChain(ti => ti.Type.BaseType.NullOr(bt => bt.IsGenericType
                         ? new { Type = bt.GetGenericTypeDefinition(), Substitutions = ti.Substitutions.Concat(bt.GetGenericTypeDefinition().GetGenericArguments().Select((ga, gai) => Ut.KeyValuePair(ga, bt.GetGenericArguments()[gai]))).ToDictionary() }
                         : new { Type = bt, Substitutions = new Dictionary<Type, Type>() }))
+                    // Remove types that are not in our scope
                     .Where(ti => _types.ContainsKey(getTypeFullName(ti.Type)))
+                    // Get all the members of this type and all base types
                     .SelectMany(ti => _types[getTypeFullName(ti.Type)].Members.Select(m => new { InheritedFrom = ti.Type, Substitutions = ti.Substitutions, MemberName = m.Key, Member = m.Value.Member, Documentation = m.Value.Documentation }))
+                    // Filter out internal members and inherited constructors
                     .Where(inf => isPublic(inf.Member) && (inf.InheritedFrom == type || inf.Member.MemberType != MemberTypes.Constructor))
+                    // For chains of virtual overrides, only use the least derived member (the “base” method/property/event)
                     .GroupBy(mbr => mbr.Member.IfType((MethodInfo m) => m.GetBaseDefinition(), (PropertyInfo p) => p.GetBaseDefinition(), (EventInfo e) => e.GetBaseDefinition(), m => m))
                     .Select(g => g.First())
+                    // Find out which inherited members are hidden by less derived members of the same signature
+                    .GroupBy(mbr => documentationCompatibleMemberName(mbr.Member, type, mbr.Substitutions))
+                    .Select(gr => new { LeastDerived = gr.First(), Hides = gr.Skip(1).Select(hide => new hideInfo(hide.Member, hide.MemberName, hide.Substitutions)).ToArray() })
+                    .Select(gr => new { gr.LeastDerived.Documentation, gr.LeastDerived.InheritedFrom, gr.LeastDerived.Member, gr.LeastDerived.MemberName, gr.LeastDerived.Substitutions, gr.Hides })
+                    // Sorting
                     .OrderBy(inf => inf.Member, memberComparer.Instance)
+                    // Group by the sections we want on the page (constructors, events, fields, methods, operators, properties, nested types, etc.etc.)
                     .GroupBy(inf => new { MemberType = inf.Member.MemberType, IsStatic = isStatic(inf.Member), IsOperator = inf.Member.MemberType == MemberTypes.Method && _operators.Contains(inf.Member.Name) }))
                 {
                     var isEnumValues = group.Key.MemberType == MemberTypes.Field && group.Key.IsStatic && type.IsEnum;
@@ -1235,7 +1264,7 @@ namespace RT.DocGen
                                 new DIV { class_ = "withicon " + (inf.Member.MemberType == MemberTypes.NestedType ? _types[inf.MemberName].GetTypeCssClass() : inf.Member.MemberType.ToString()) }._(
                                     friendlyMemberName(inf.Member, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + inf.MemberName.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref(), subst: inf.Substitutions)
                                 ),
-                                formatMemberExtraInfo(req, inf.Member, false, inf.InheritedFrom == type ? null : inf.InheritedFrom, inf.Substitutions)
+                                formatMemberExtraInfo(req, inf.Member, false, inf.InheritedFrom == type ? null : inf.InheritedFrom, inf.Substitutions, inf.Hides)
                             ),
                             isEnumValues ? new TD { class_ = "numeric" }._(((FieldInfo) inf.Member).GetRawConstantValue()) : null,
                             index > 0 ? null : new TD { class_ = "documentation", rowspan = gr.Count }._(
@@ -1249,6 +1278,19 @@ namespace RT.DocGen
                         )))
                     );
                 }
+            }
+        }
+
+        private sealed class hideInfo
+        {
+            public MemberInfo Member { get; private set; }
+            public string MemberName { get; private set; }
+            public Dictionary<Type, Type> Substitutions { get; private set; }
+            public hideInfo(MemberInfo member, string memberName, Dictionary<Type, Type> substitutions)
+            {
+                Member = member;
+                MemberName = memberName;
+                Substitutions = substitutions;
             }
         }
 
@@ -1293,19 +1335,23 @@ namespace RT.DocGen
             return XNode.DeepEquals(doc1.Element("summary"), doc2.Element("summary"));
         }
 
-        private IEnumerable<object> formatMemberExtraInfo(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst)
+        private IEnumerable<object> formatMemberExtraInfo(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst, hideInfo[] hides)
         {
-            var listItems = formatMemberExtraInfoItems(req, member, markInterfaceMethods, inheritedFrom, subst).ToList();
+            var listItems = formatMemberExtraInfoItems(req, member, markInterfaceMethods, inheritedFrom, subst, hides).ToList();
             if (listItems.Count > 0)
                 yield return new UL { class_ = "extra" }._(listItems);
         }
 
-        private IEnumerable<object> formatMemberExtraInfoItems(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst)
+        private IEnumerable<object> formatMemberExtraInfoItems(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst, hideInfo[] hides)
         {
             string baseUrl = req.Url.WithPathOnly("").ToHref();
 
             if (inheritedFrom != null)
                 yield return new LI("Inherited from ", friendlyTypeName(inheritedFrom, includeOuterTypes: true, baseUrl: baseUrl, span: true, subst: subst));
+
+            if (hides != null)
+                foreach (var hide in hides)
+                    yield return new LI("Hides ", friendlyMemberName(hide.Member, containingType: true, parameterTypes: true, url: req.Url.WithPathOnly("/" + hide.MemberName.UrlEscape()).ToHref(), baseUrl: baseUrl, subst: hide.Substitutions));
 
             var method = member as MethodInfo;
             if (method == null)
