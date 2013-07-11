@@ -123,7 +123,22 @@ namespace RT.DocGen
                 {
                     var res = x.Name.CompareTo(y.Name);
                     if (res == 0 && "MO".Contains(typeX))
-                        return ((MethodInfo) x).GetParameters().Length.CompareTo(((MethodInfo) y).GetParameters().Length);
+                    {
+                        var methX = (MethodInfo) x;
+                        var methY = (MethodInfo) y;
+                        if (methX.IsGenericMethod && methY.IsGenericMethod)
+                        {
+                            var c1 = methX.GetGenericArguments().Length.CompareTo(methY.GetGenericArguments().Length);
+                            if (c1 != 0)
+                                return c1;
+                        }
+                        else if (methX.IsGenericMethod)
+                            return 1;
+                        else if (methY.IsGenericMethod)
+                            return -1;
+                        // No ‘else’ here because the first ‘if’ branch can fall through!
+                        return methX.GetParameters().Length.CompareTo(methY.GetParameters().Length);
+                    }
                     return res;
                 }
 
