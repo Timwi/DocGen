@@ -6,6 +6,7 @@ using RT.PropellerApi;
 using RT.Servers;
 using RT.Util;
 using RT.Util.ExtensionMethods;
+using RT.Util.Serialization;
 using RT.Util.Xml;
 
 namespace RT.DocGen
@@ -17,7 +18,7 @@ namespace RT.DocGen
             public string Url = "/doc";
             public string[] Paths = new string[] { };
             public bool RequireAuthentication = true;
-            [XmlIgnoreIfDefault]
+            public string DllTempPath = null;
             public string UsernamePasswordFile = null;
         }
 
@@ -39,7 +40,7 @@ namespace RT.DocGen
                     _log.Warn(@"DocGen: Warning: The folder ""{0}"" specified in the configuration file ""{1}"" does not exist. Ignoring path.".Fmt(invalid, _configFilePath));
 
             // Try to clean up old folders we've created before
-            var tempPath = Path.GetTempPath();
+            var tempPath = _settings.DllTempPath ?? Path.GetTempPath();
             foreach (var pth in Directory.GetDirectories(tempPath, "docgen-tmp-*"))
             {
                 foreach (var file in Directory.GetFiles(pth))
@@ -90,7 +91,9 @@ namespace RT.DocGen
         {
             try
             {
-                _settings = XmlClassify.LoadObjectFromXmlFile<Settings>(_configFilePath);
+                lock (_log)
+                    _log.Info("DocGen: loading configuration file: {0}".Fmt(_configFilePath));
+                _settings = ClassifyXml.DeserializeFile<Settings>(_configFilePath);
             }
             catch (Exception e)
             {
@@ -142,17 +145,19 @@ namespace RT.DocGen
                     }
                 }
                 _settings = new Settings { Paths = new string[] { newPath } };
-                try
+            }
+
+            // After loading, write settings out again
+            try
+            {
+                ClassifyXml.SerializeToFile(_settings, _configFilePath);
+            }
+            catch (Exception e3)
+            {
+                lock (_log)
                 {
-                    XmlClassify.SaveObjectToXmlFile(_settings, _configFilePath);
-                }
-                catch (Exception e3)
-                {
-                    lock (_log)
-                    {
-                        _log.Error("DocGen: Error saving configuration file: {0}".Fmt(_configFilePath));
-                        _log.Error(e3.Message);
-                    }
+                    _log.Error("DocGen: Error saving configuration file: {0}".Fmt(_configFilePath));
+                    _log.Error(e3.Message);
                 }
             }
         }
