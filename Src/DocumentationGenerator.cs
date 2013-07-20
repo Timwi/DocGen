@@ -407,6 +407,7 @@ namespace RT.DocGen
         private IEnumerable<object> generateAllMembers(HttpRequest req)
         {
             yield return new H1("All members");
+
             yield return new DIV { class_ = "innercontent" }._(generateAll(
                 _members.Where(k => k.Value.Member.MemberType != MemberTypes.NestedType && !typeof(Delegate).IsAssignableFrom(k.Value.Member.DeclaringType)),
                 k =>
@@ -587,6 +588,20 @@ namespace RT.DocGen
                 yield return "delegate ";
             if (modifiers)
             {
+                if (m.IsPublic)
+                    yield return "public ";
+                else if (m.IsFamily)
+                    yield return "protected ";
+                else if (m.IsFamilyOrAssembly)
+                    yield return "protected internal ";
+                // The following should never occur, but add for completeness...
+                else if (m.IsAssembly)
+                    yield return "internal ";
+                else if (m.IsFamilyAndAssembly)
+                    yield return "proternal ";  // no C# equivalent
+                else if (m.IsPrivate)
+                    yield return "private ";
+
                 if (m.IsStatic)
                     yield return "static ";
                 if (m.IsVirtual)
@@ -1311,22 +1326,31 @@ namespace RT.DocGen
 
         private IEnumerable<object> generateParameterDocumentation(HttpRequest req, MethodBase method, XElement methodDocumentation)
         {
+            var parameters = method.GetParameters();
+            var parameterInfos = Enumerable.Range(0, parameters.Length).Select(i => new
+            {
+                Parameter = parameters[i],
+                Documentation = methodDocumentation == null ? null : methodDocumentation.Elements("param")
+                        .FirstOrDefault(xe => xe.Attribute("name") != null && xe.Attribute("name").Value == parameters[i].Name)
+            }).ToArray();
+
+            if (parameterInfos.All(pi => pi.Documentation == null))
+                yield break;
+
             yield return new H2("Parameters");
             yield return new TABLE { class_ = "doclist" }._(
-                method.GetParameters().Select((pi, index) =>
+                parameterInfos.Select((pi, index) =>
                 {
-                    var parameterDocumentation = methodDocumentation == null ? null : methodDocumentation.Elements("param")
-                        .FirstOrDefault(xe => xe.Attribute("name") != null && xe.Attribute("name").Value == pi.Name);
                     return new TR(
                         new TD { class_ = "membertype" }._(
-                            friendlyTypeName(pi.ParameterType, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), inclRef: true, isOut: pi.IsOut, isThis: index == 0 && method.IsDefined<ExtensionAttribute>(), span: true)
+                            friendlyTypeName(pi.Parameter.ParameterType, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), inclRef: true, isOut: pi.Parameter.IsOut, isThis: index == 0 && method.IsDefined<ExtensionAttribute>(), span: true)
                         ),
                         new TD { class_ = "member" }._(
-                            new STRONG { class_ = "member-name parameter" }._(pi.Name)
+                            new STRONG { class_ = "member-name parameter" }._(pi.Parameter.Name)
                         ),
-                        new TD { class_ = "documentation" }._(parameterDocumentation == null
+                        new TD { class_ = "documentation" }._(pi.Documentation == null
                             ? (object) new EM("This parameter is not documented.")
-                            : interpretNodes(parameterDocumentation.Nodes(), req))
+                            : interpretNodes(pi.Documentation.Nodes(), req))
                     );
                 })
             );
@@ -1405,7 +1429,12 @@ namespace RT.DocGen
                 if (baseDefinition != member)
                 {
                     string url = null;
-                    var dcmn = documentationCompatibleMemberName(baseDefinition);
+                    var baseDefinitionWithoutGenerics = baseDefinition.IfType(
+                        // Dirty hack, but simplest way I could find to retrieve the uninstantiated MethodInfo
+                        (MethodInfo mi) => mi.ContainsGenericParameters ? MethodInfo.GetMethodFromHandle(mi.MethodHandle, mi.DeclaringType.GetGenericTypeDefinition().TypeHandle) : mi,
+                        mi => mi
+                    );
+                    var dcmn = documentationCompatibleMemberName(baseDefinitionWithoutGenerics);
                     if (_members.ContainsKey(dcmn))
                         url = req.Url.WithPathOnly("/" + dcmn.UrlEscape()).ToHref();
                     yield return new LI(new object[] { "Overrides: ", friendlyMemberName(baseDefinition, containingType: true, parameterTypes: true, url: url, baseUrl: baseUrl) });
