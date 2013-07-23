@@ -1292,7 +1292,7 @@ namespace RT.DocGen
                                 ),
                             new TD { class_ = "member" }._(
                                 new DIV { class_ = "withicon " + (inf.Member.MemberType == MemberTypes.NestedType ? _types[inf.MemberName].GetTypeCssClass() : inf.Member.MemberType.ToString()) }._(
-                                    friendlyMemberName(inf.Member, parameterTypes: true, parameterNames: true, url: req.Url.WithPathOnly("/" + inf.MemberName.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref(), subst: inf.Substitutions)
+                                    friendlyMemberName(inf.Member, parameterTypes: true, parameterNames: true, parameterDefaultValues: true, url: req.Url.WithPathOnly("/" + inf.MemberName.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref(), subst: inf.Substitutions)
                                 ),
                                 formatMemberExtraInfo(req, inf.Member, false, inf.InheritedFrom == type ? null : inf.InheritedFrom, inf.Substitutions, inf.Hides)
                             ),
