@@ -72,16 +72,16 @@ namespace RT.DocGen
                         _log.Warn("{0} error: {1}".Fmt(tuple.Item1, tuple.Item2));
                 }
             }
-            var hooks = new List<UrlPathHook>();
+            var mappings = new List<UrlMapping>();
 
             if (string.IsNullOrEmpty(_settings.Url))
-                hooks.Add(new UrlPathHook(_docGen.Handler));
+                mappings.Add(new UrlMapping(_docGen.Handler));
             else
-                hooks.Add(new UrlPathHook(_docGen.Handler, path: _settings.Url));
+                mappings.Add(new UrlMapping(_docGen.Handler, path: _settings.Url));
 
             return new PropellerModuleInitResult
             {
-                UrlPathHooks = hooks,
+                UrlMappings = mappings,
                 FileFiltersToBeMonitoredForChanges = paths.Select(p => Path.Combine(p, "*.dll")).Concat(paths.Select(p => Path.Combine(p, "*.xml"))).Concat(_configFilePath)
             };
         }

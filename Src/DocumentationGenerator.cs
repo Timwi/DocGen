@@ -244,7 +244,7 @@ namespace RT.DocGen
         }
 
         private Authenticator _authenticator;
-        private UrlPathResolver _resolver;
+        private UrlResolver _resolver;
 
         /// <summary>Provides the HTTP request handler for the documentation.</summary>
         public HttpResponse Handler(HttpRequest request)
@@ -254,16 +254,16 @@ namespace RT.DocGen
 
             if (_resolver == null)
             {
-                _resolver = new UrlPathResolver();
+                _resolver = new UrlResolver();
                 foreach (var field in typeof(Css).GetFields(BindingFlags.Static | BindingFlags.Public).Where(f => f.FieldType == typeof(string)))
                 {
                     var cssCode = (string) field.GetValue(null);
-                    _resolver.Add(new UrlPathHook(path: "/css/" + field.Name, specificPath: true, handler: req => HttpResponse.Create(cssCode, "text/css; charset=utf-8")));
+                    _resolver.Add(new UrlMapping(path: "/css/" + field.Name, specificPath: true, handler: req => HttpResponse.Create(cssCode, "text/css; charset=utf-8")));
                 }
-                _resolver.Add(new UrlPathHook(path: "/q", handler: quickUrl));
+                _resolver.Add(new UrlMapping(path: "/q", handler: quickUrl));
                 if (_usernamePasswordFile != null)
-                    _resolver.Add(new UrlPathHook(path: "/auth", handler: req => Session.EnableManual<docGenSession>(req, session => _authenticator.Handle(req, session.Username, session.SetUsername))));
-                _resolver.Add(new UrlPathHook(handler: handle));
+                    _resolver.Add(new UrlMapping(path: "/auth", handler: req => Session.EnableManual<docGenSession>(req, session => _authenticator.Handle(req, session.Username, session.SetUsername))));
+                _resolver.Add(new UrlMapping(handler: handle));
             }
 
             return _resolver.Handle(request);
@@ -331,6 +331,10 @@ namespace RT.DocGen
                 }
                 else if (req.Url.Path == "/")
                 {
+                    // If there is only one namespace, no point in asking the user to choose one. Just redirect to it
+                    if (_namespaces.Count == 1)
+                        return HttpResponse.Redirect(req.Url.WithPath("/" + _namespaces.First().Key));
+
                     title = null;
                     content = new object[] { new H1("Welcome"), new DIV { class_ = "warning" }._("Select an item from the list on the left.") };
                 }
