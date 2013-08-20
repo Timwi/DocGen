@@ -12,13 +12,22 @@ namespace RT.DocGen
 {
     public class DocGenPropellerModule : MarshalByRefObject, IPropellerModule
     {
-        class Settings
+        class Settings : IClassifyXmlObjectProcessor
         {
-            public string Url = "/doc";
+            public UrlHook[] Hooks = new[] { new UrlHook(path: "/doc") };
             public string[] Paths = new string[] { };
             public bool RequireAuthentication = true;
             public string DllTempPath = null;
             public string UsernamePasswordFile = null;
+
+            void IClassifyObjectProcessor<System.Xml.Linq.XElement>.BeforeSerialize() { }
+            void IClassifyObjectProcessor<System.Xml.Linq.XElement>.AfterSerialize(System.Xml.Linq.XElement element) { }
+            void IClassifyObjectProcessor<System.Xml.Linq.XElement>.BeforeDeserialize(System.Xml.Linq.XElement element) { }
+            void IClassifyObjectProcessor<System.Xml.Linq.XElement>.AfterDeserialize(System.Xml.Linq.XElement element)
+            {
+                if (Hooks == null)
+                    Hooks = new[] { new UrlHook() };
+            }
         }
 
         private Settings _settings;
@@ -72,16 +81,10 @@ namespace RT.DocGen
                         _log.Warn("{0} error: {1}".Fmt(tuple.Item1, tuple.Item2));
                 }
             }
-            var mappings = new List<UrlMapping>();
-
-            if (string.IsNullOrEmpty(_settings.Url))
-                mappings.Add(new UrlMapping(_docGen.Handler));
-            else
-                mappings.Add(new UrlMapping(_docGen.Handler, path: _settings.Url));
 
             return new PropellerModuleInitResult
             {
-                UrlMappings = mappings,
+                UrlMappings = _settings.Hooks.Select(hook => new UrlMapping(hook, _docGen.Handle)),
                 FileFiltersToBeMonitoredForChanges = paths.Select(p => Path.Combine(p, "*.dll")).Concat(paths.Select(p => Path.Combine(p, "*.xml"))).Concat(_configFilePath)
             };
         }

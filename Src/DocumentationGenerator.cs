@@ -247,7 +247,7 @@ namespace RT.DocGen
         private UrlResolver _resolver;
 
         /// <summary>Provides the HTTP request handler for the documentation.</summary>
-        public HttpResponse Handler(HttpRequest request)
+        public HttpResponse Handle(HttpRequest request)
         {
             if (_authenticator == null && _usernamePasswordFile != null)
                 _authenticator = new Authenticator(_usernamePasswordFile, url => url.WithPathOnly("/").ToHref(), "the documentation");
