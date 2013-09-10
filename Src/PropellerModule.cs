@@ -6,55 +6,57 @@ using RT.PropellerApi;
 using RT.Servers;
 using RT.Util;
 using RT.Util.ExtensionMethods;
+using RT.Util.Json;
 using RT.Util.Serialization;
 
 namespace RT.DocGen
 {
     public class DocGenPropellerModule : MarshalByRefObject, IPropellerModule
     {
-        class Settings : IClassifyXmlObjectProcessor
+        string IPropellerModule.Name
         {
-            public UrlHook[] Hooks = new[] { new UrlHook(path: "/doc") };
+            get
+            {
+                return "Documentation Generator";
+            }
+        }
+
+        class Settings
+        {
+            [ClassifyNotNull]
             public string[] Paths = new string[] { };
             public bool RequireAuthentication = true;
             public string DllTempPath = null;
             public string UsernamePasswordFile = null;
-
-            void IClassifyObjectProcessor<System.Xml.Linq.XElement>.BeforeSerialize() { }
-            void IClassifyObjectProcessor<System.Xml.Linq.XElement>.AfterSerialize(System.Xml.Linq.XElement element) { }
-            void IClassifyObjectProcessor<System.Xml.Linq.XElement>.BeforeDeserialize(System.Xml.Linq.XElement element) { }
-            void IClassifyObjectProcessor<System.Xml.Linq.XElement>.AfterDeserialize(System.Xml.Linq.XElement element)
-            {
-                if (Hooks == null)
-                    Hooks = new[] { new UrlHook() };
-            }
         }
 
         private Settings _settings;
-        private DocumentationGenerator _docGen;
-        private string _configFilePath;
         private LoggerBase _log;
+        private ISettingsSaver _saver;
+        private DocumentationGenerator _docGen;
 
-        public string GetName() { return "DocGen"; }
-
-        public PropellerModuleInitResult Init(string origDllPath, string tempDllPath, LoggerBase log)
+        void IPropellerModule.Init(LoggerBase log, JsonValue settings, ISettingsSaver saver)
         {
             _log = log;
-            _configFilePath = Path.Combine(Path.GetDirectoryName(origDllPath), Path.GetFileNameWithoutExtension(origDllPath) + ".config.xml");
-            loadSettings();
+            _saver = saver;
+            _settings = ClassifyJson.Deserialize<Settings>(settings) ?? new Settings();
 
-            foreach (var invalid in _settings.Paths.Where(d => !Directory.Exists(d)))
-                lock (_log)
-                    _log.Warn(@"DocGen: Warning: The folder ""{0}"" specified in the configuration file ""{1}"" does not exist. Ignoring path.".Fmt(invalid, _configFilePath));
+            var validPaths = new List<string>();
+
+            foreach (var path in _settings.Paths)
+                if (!Directory.Exists(path))
+                    _log.Warn(@"DocGen: Warning: The folder ""{0}"" specified in the settings does not exist. Ignoring path.".Fmt(path));
+                else
+                    validPaths.Add(path);
+            _settings.Paths = validPaths.ToArray();
+
+            saver.SaveSettings(ClassifyJson.Serialize(_settings));
 
             // Try to clean up old folders we've created before
             var tempPath = _settings.DllTempPath ?? Path.GetTempPath();
-            foreach (var pth in Directory.GetDirectories(tempPath, "docgen-tmp-*"))
+            foreach (var path in Directory.GetDirectories(tempPath, "docgen-tmp-*"))
             {
-                foreach (var file in Directory.GetFiles(pth))
-                    try { File.Delete(file); }
-                    catch { }
-                try { Directory.Delete(pth); }
+                try { Directory.Delete(path, true); }
                 catch { }
             }
 
@@ -68,12 +70,10 @@ namespace RT.DocGen
             }
             Directory.CreateDirectory(copyToPath);
 
-            var paths = _settings.Paths.Where(d => Directory.Exists(d)).ToArray();
-            _docGen = new DocumentationGenerator(paths, _settings.RequireAuthentication ? _settings.UsernamePasswordFile ?? "" : null, copyToPath);
+            _docGen = new DocumentationGenerator(_settings.Paths, _settings.RequireAuthentication ? _settings.UsernamePasswordFile ?? "" : null, copyToPath);
             lock (_log)
             {
-                _log.Info("DocGen initialised.");
-                _log.Info("{0} assemblies loaded: {1}".Fmt(_docGen.AssembliesLoaded.Count, _docGen.AssembliesLoaded.JoinString(", ")));
+                _log.Info("DocGen initialised with {0} assemblies: {1}".Fmt(_docGen.AssembliesLoaded.Count, _docGen.AssembliesLoaded.JoinString(", ")));
                 if (_docGen.AssemblyLoadErrors.Count > 0)
                 {
                     _log.Warn("{0} assembly load errors:".Fmt(_docGen.AssemblyLoadErrors.Count));
@@ -81,96 +81,20 @@ namespace RT.DocGen
                         _log.Warn("{0} error: {1}".Fmt(tuple.Item1, tuple.Item2));
                 }
             }
-
-            return new PropellerModuleInitResult
-            {
-                UrlMappings = _settings.Hooks.Select(hook => new UrlMapping(hook, _docGen.Handle)),
-                FileFiltersToBeMonitoredForChanges = paths.Select(p => Path.Combine(p, "*.dll")).Concat(paths.Select(p => Path.Combine(p, "*.xml"))).Concat(_configFilePath)
-            };
         }
 
-        private void loadSettings()
+        string[] IPropellerModule.FileFiltersToBeMonitoredForChanges
         {
-            try
+            get
             {
-                lock (_log)
-                    _log.Info("DocGen: loading configuration file: {0}".Fmt(_configFilePath));
-                _settings = ClassifyXml.DeserializeFile<Settings>(_configFilePath);
-            }
-            catch (Exception e)
-            {
-                if (File.Exists(_configFilePath))
-                {
-                    lock (_log)
-                    {
-                        _log.Warn("DocGen: Error reading configuration file: {0}".Fmt(_configFilePath));
-                        _log.Warn(e.Message);
-                    }
-
-                    string renameTo = _configFilePath;
-                    int i = 1;
-                    while (File.Exists(renameTo))
-                    {
-                        i++;
-                        renameTo = Path.Combine(Path.GetDirectoryName(_configFilePath), Path.GetFileNameWithoutExtension(_configFilePath) + " (" + i + ")" + Path.GetExtension(_configFilePath));
-                    }
-                    try
-                    {
-                        File.Move(_configFilePath, renameTo);
-                    }
-                    catch (Exception e2)
-                    {
-                        lock (_log)
-                        {
-                            _log.Warn("DocGen: Error renaming configuration file to: {0}".Fmt(renameTo));
-                            _log.Warn(e2.Message);
-                        }
-                        return;
-                    }
-                    lock (_log)
-                        _log.Warn(@"DocGen: Configuration file renamed to ""{0}"".".Fmt(renameTo));
-                }
-                lock (_log)
-                    _log.Info("DocGen: Creating new configuration file with default values...");
-
-                var newPath = Path.Combine(Path.GetDirectoryName(_configFilePath), "DocGen");
-                try
-                {
-                    Directory.CreateDirectory(newPath);
-                }
-                catch (Exception e3)
-                {
-                    lock (_log)
-                    {
-                        _log.Error("DocGen: Error creating directory: {0}".Fmt(newPath));
-                        _log.Error(e3.Message);
-                    }
-                }
-                _settings = new Settings { Paths = new string[] { newPath } };
-            }
-
-            // After loading, write settings out again
-            try
-            {
-                ClassifyXml.SerializeToFile(_settings, _configFilePath);
-            }
-            catch (Exception e3)
-            {
-                lock (_log)
-                {
-                    _log.Error("DocGen: Error saving configuration file: {0}".Fmt(_configFilePath));
-                    _log.Error(e3.Message);
-                }
+                return
+                    _settings.Paths.Select(p => Path.Combine(p, "*.dll")).Concat(
+                    _settings.Paths.Select(p => Path.Combine(p, "*.xml"))).ToArray();
             }
         }
 
-        public bool MustReinitServer()
-        {
-            return false;
-        }
-
-        public void Shutdown()
-        {
-        }
+        HttpResponse IPropellerModule.Handle(HttpRequest req) { return _docGen.Handle(req); }
+        bool IPropellerModule.MustReinitialize { get { return false; } }
+        void IPropellerModule.Shutdown() { }
     }
 }
