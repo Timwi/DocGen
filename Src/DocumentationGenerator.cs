@@ -565,7 +565,7 @@ namespace RT.DocGen
         private object friendlyMemberName(MemberInfo m, bool returnType = false, bool containingType = false, bool parameterTypes = false, bool parameterNames = false, bool parameterDefaultValues = false, bool omitGenericTypeParameters = false, bool namespaces = false, bool variance = false, bool indent = false, string url = null, string baseUrl = null, bool stringOnly = false, bool modifiers = false, Dictionary<Type, Type> subst = null)
         {
             if (m.MemberType == MemberTypes.NestedType)
-                return friendlyTypeName((Type) m, includeNamespaces: namespaces, includeOuterTypes: true, variance: variance, baseUrl: baseUrl, span: !stringOnly, modifiers: modifiers, subst: subst);
+                return friendlyTypeName((Type) m, includeNamespaces: namespaces, includeOuterTypes: containingType, variance: variance, baseUrl: baseUrl, span: !stringOnly, modifiers: modifiers, subst: subst);
 
             if (m.MemberType == MemberTypes.Constructor || m.MemberType == MemberTypes.Method)
             {
@@ -1184,7 +1184,7 @@ namespace RT.DocGen
                 inheritsFrom(type, req),
                 implementsInterfaces(type, req),
                 type.IsInterface ? implementedBy(type, req) : derivedTypes(type, req),
-                type.IsEnum ? new LI("Underlying integer type: ", type.GetEnumUnderlyingType().FullName) : null
+                type.IsEnum ? new LI("Underlying integer type: ", new CODE(type.GetEnumUnderlyingType().FullName)) : null
             );
 
             MethodInfo delegateInvokeMethod = null;

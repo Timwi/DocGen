@@ -230,8 +230,11 @@ table {
         padding-left: 0;
     }
 
-        table.doclist td.member strong.member-name, table.doclist td.member strong.member-name .type {
+        table.doclist td.member > div > span > strong.member-name,  /* member names, e.g. fields, properties, events */
+        table.doclist td.member > div > span > strong.member-name .type,    /* constructors */
+        table.doclist td.member > div > span.type {     /* nested types */
             font-size: 14pt;
+            font-weight: bold;
         }
 
     table.doclist td.documentation {
