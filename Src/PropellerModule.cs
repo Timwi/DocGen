@@ -54,6 +54,7 @@ namespace RT.DocGen
 
             // Try to clean up old folders we've created before
             var tempPath = _settings.DllTempPath ?? Path.GetTempPath();
+            Directory.CreateDirectory(tempPath);
             foreach (var path in Directory.GetDirectories(tempPath, "docgen-tmp-*"))
             {
                 try { Directory.Delete(path, true); }
