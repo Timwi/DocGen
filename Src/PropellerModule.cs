@@ -52,24 +52,28 @@ namespace RT.DocGen
 
             saver.SaveSettings(ClassifyJson.Serialize(_settings));
 
-            // Try to clean up old folders we've created before
-            var tempPath = _settings.DllTempPath ?? Path.GetTempPath();
-            Directory.CreateDirectory(tempPath);
-            foreach (var path in Directory.GetDirectories(tempPath, "docgen-tmp-*"))
+            string copyToPath = null;
+            if (_settings.DllTempPath != null)
             {
-                try { Directory.Delete(path, true); }
-                catch { }
-            }
+                // Try to clean up old folders we've created before
+                var tempPath = _settings.DllTempPath;
+                Directory.CreateDirectory(tempPath);
+                foreach (var path in Directory.GetDirectories(tempPath, "docgen-tmp-*"))
+                {
+                    try { Directory.Delete(path, true); }
+                    catch { }
+                }
 
-            // Find a new folder to put the DLL files into
-            int j = 1;
-            var copyToPath = Path.Combine(tempPath, "docgen-tmp-" + j);
-            while (Directory.Exists(copyToPath))
-            {
-                j++;
+                // Find a new folder to put the DLL files into
+                int j = 1;
                 copyToPath = Path.Combine(tempPath, "docgen-tmp-" + j);
+                while (Directory.Exists(copyToPath))
+                {
+                    j++;
+                    copyToPath = Path.Combine(tempPath, "docgen-tmp-" + j);
+                }
+                Directory.CreateDirectory(copyToPath);
             }
-            Directory.CreateDirectory(copyToPath);
 
             _docGen = new DocumentationGenerator(_settings.Paths, _settings.RequireAuthentication ? _settings.UsernamePasswordFile ?? "" : null, copyToPath);
             lock (_log)

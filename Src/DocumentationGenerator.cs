@@ -317,16 +317,8 @@ namespace RT.DocGen
                     member = _members[token].Member;
                     type = member.DeclaringType;
                     ns = type.Namespace;
-                    var isstatic = isStatic(member);
-                    title = member.MemberType == MemberTypes.Constructor ? "Constructor: " :
-                                member.MemberType == MemberTypes.Event ? "Event: " :
-                                member.MemberType == MemberTypes.Field && isstatic ? "Static field: " :
-                                member.MemberType == MemberTypes.Field ? "Field: " :
-                                member.MemberType == MemberTypes.Method && isstatic ? "Static method: " :
-                                member.MemberType == MemberTypes.Method ? "Method: " :
-                                member.MemberType == MemberTypes.Property && isstatic ? "Static property: " :
-                                member.MemberType == MemberTypes.Property ? "Property: " : "Member: ";
-                    title += member.MemberType == MemberTypes.Constructor ? stringSoup(friendlyTypeName(type, includeOuterTypes: true)) : member.Name;
+                    title = getMemberTitle(member) + ": " +
+                        (member.MemberType == MemberTypes.Constructor ? stringSoup(friendlyTypeName(type, includeOuterTypes: true)) : member.Name);
                     content = generateMemberDocumentation(req, _members[token].Member, _members[token].Documentation);
                 }
                 else if (req.Url.Path == "/")
@@ -1080,21 +1072,26 @@ namespace RT.DocGen
 
         private IEnumerable<object> generateMemberDocumentation(HttpRequest req, MemberInfo member, XElement documentation)
         {
-            bool isStatic =
-                member.MemberType == MemberTypes.Field && (member as FieldInfo).IsStatic ||
-                member.MemberType == MemberTypes.Method && (member as MethodInfo).IsStatic ||
-                member.MemberType == MemberTypes.Property && (member as PropertyInfo).GetGetMethod().IsStatic;
-
             yield return new H1(
-                member.MemberType == MemberTypes.Constructor ? "Constructor: " :
-                member.MemberType == MemberTypes.Event ? "Event: " :
-                member.MemberType == MemberTypes.Field ? (isStatic ? "Static field: " : "Field: ") :
-                member.MemberType == MemberTypes.Method ? (member.IsDefined<ExtensionAttribute>() ? "Extension method: " : isStatic ? "Static method: " : "Method: ") :
-                member.MemberType == MemberTypes.Property ? (isStatic ? "Static property: " : "Property: ") : "Member: ",
+                getMemberTitle(member), ": ",
                 friendlyMemberName(member, returnType: true, parameterTypes: true)
             );
 
             yield return new DIV { class_ = "innercontent" }._(generateMemberDocumentationInner(req, member, documentation));
+        }
+
+        private string getMemberTitle(MemberInfo member)
+        {
+            bool isStatic =
+                member.MemberType == MemberTypes.Field && (member as FieldInfo).IsStatic ||
+                member.MemberType == MemberTypes.Method && (member as MethodInfo).IsStatic ||
+                member.MemberType == MemberTypes.Property && (member as PropertyInfo).GetGetMethod().IsStatic;
+            return
+                member.MemberType == MemberTypes.Constructor ? "Constructor" :
+                member.MemberType == MemberTypes.Event ? "Event" :
+                member.MemberType == MemberTypes.Field ? (isStatic ? "Static field" : "Field") :
+                member.MemberType == MemberTypes.Method ? (member.IsDefined<ExtensionAttribute>() ? "Extension method" : isStatic ? "Static method" : "Method") :
+                member.MemberType == MemberTypes.Property ? (isStatic ? "Static property" : "Property") : "Member";
         }
 
         private IEnumerable<object> generateMemberDocumentationInner(HttpRequest req, MemberInfo member, XElement documentation)
@@ -1713,7 +1710,7 @@ namespace RT.DocGen
             if (_types.ContainsKey(token))
                 return friendlyTypeName(_types[token].Type, includeNamespaces, includeOuterTypes: true, baseUrl: req.Url.WithPathOnly("").ToHref(), span: true);
             else if (_members.ContainsKey(token))
-                return friendlyMemberName(_members[token].Member, parameterTypes: true, namespaces: includeNamespaces, url: req.Url.WithPathOnly("/" + token.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref());
+                return friendlyMemberName(_members[token].Member, containingType: true, parameterTypes: true, namespaces: includeNamespaces, url: req.Url.WithPathOnly("/" + token.UrlEscape()).ToHref(), baseUrl: req.Url.WithPathOnly("").ToHref());
             else if (token.StartsWith("T:") && (actual = Type.GetType(token.Substring(2), throwOnError: false, ignoreCase: true)) != null)
                 return new SPAN { title = actual.FullName }._(foreignTypeName(actual, includeNamespaces));
             else if (token.StartsWith("T:"))
