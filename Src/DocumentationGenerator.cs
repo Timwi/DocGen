@@ -243,14 +243,14 @@ namespace RT.DocGen
             return "T:" + (t.IsGenericType ? t.GetGenericTypeDefinition() : t).FullName.TrimEnd('&').Replace("+", ".");
         }
 
-        private Authenticator _authenticator;
+        private FileAuthenticator _authenticator;
         private UrlResolver _resolver;
 
         /// <summary>Provides the HTTP request handler for the documentation.</summary>
         public HttpResponse Handle(HttpRequest request)
         {
             if (_authenticator == null && _usernamePasswordFile != null)
-                _authenticator = new Authenticator(_usernamePasswordFile, url => url.WithPathOnly("/").ToHref(), "the documentation");
+                _authenticator = new FileAuthenticator(_usernamePasswordFile, url => url.WithPathOnly("/").ToHref(), "the documentation");
 
             if (_resolver == null)
             {
