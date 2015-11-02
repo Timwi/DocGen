@@ -317,8 +317,10 @@ namespace RT.DocGen
                     member = _members[token].Member;
                     type = member.DeclaringType;
                     ns = type.Namespace;
-                    title = getMemberTitle(member) + ": " +
-                        (member.MemberType == MemberTypes.Constructor ? stringSoup(friendlyTypeName(type, includeOuterTypes: true)) : member.Name);
+                    title = getMemberTitle(member) + ": " + stringSoup(
+                        member.MemberType == MemberTypes.Constructor ? friendlyTypeName(type, includeOuterTypes: true) :
+                        member.MemberType == MemberTypes.Method ? cSharpCompatibleMethodName(member.Name) :
+                        member.Name);
                     content = generateMemberDocumentation(req, _members[token].Member, _members[token].Documentation);
                 }
                 else if (req.Url.Path == "/")
@@ -706,12 +708,12 @@ namespace RT.DocGen
             "op_Equality", "op_Inequality", "op_LessThan", "op_GreaterThan", "op_LessThanOrEqual", "op_GreaterThanOrEqual"
         );
 
-        private object cSharpCompatibleMethodName(string methodName, object returnType)
+        private object cSharpCompatibleMethodName(string methodName, object returnType = null)
         {
             switch (methodName)
             {
-                case "op_Implicit": return new object[] { "implicit operator ", returnType };
-                case "op_Explicit": return new object[] { "explicit operator ", returnType };
+                case "op_Implicit": return returnType == null ? (object) "implicit operator" : new object[] { "implicit operator ", returnType };
+                case "op_Explicit": return returnType == null ? (object) "explicit operator" : new object[] { "explicit operator ", returnType };
 
                 case "op_UnaryPlus":
                 case "op_Addition": return "operator+";
@@ -1090,6 +1092,7 @@ namespace RT.DocGen
                 member.MemberType == MemberTypes.Constructor ? "Constructor" :
                 member.MemberType == MemberTypes.Event ? "Event" :
                 member.MemberType == MemberTypes.Field ? (isStatic ? "Static field" : "Field") :
+                member.MemberType == MemberTypes.Method && isStatic && _operators.Contains(member.Name) ? "Operator" :
                 member.MemberType == MemberTypes.Method ? (member.IsDefined<ExtensionAttribute>() ? "Extension method" : isStatic ? "Static method" : "Method") :
                 member.MemberType == MemberTypes.Property ? (isStatic ? "Static property" : "Property") : "Member";
         }
