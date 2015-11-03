@@ -45,6 +45,7 @@ td {
         padding-right: 1.5em;
         box-shadow: inset -4px 0px 9px -6px rgba(0,0,0,.3);
         text-align: center;
+        min-width: 20em;
     }
 
         td.left > * {
@@ -81,8 +82,8 @@ td {
 
 .tree li {
     list-style-type: none;
-    text-indent: -2.5em;
-    padding-left: 2.5em;
+    text-indent: -1em;
+    padding-left: 1em;
 }
 
 .indent {
@@ -119,6 +120,23 @@ div.Field:before { content: 'F'; border-color: hsl(60, 75%, 70%); color: hsl(60,
     font-weight: bold;
     font-size: 8pt;
     border: none;
+}
+
+.tree li div.assembly {
+    margin-top: .7em;
+    font-weight: bold;
+    font-size: 16pt;
+}
+
+.tree li div.assembly:before {
+    font-family: ""Tahoma"", sans-serif;
+    font-weight: bold;
+    font-size: 7pt;
+    border: none;
+}
+
+.tree li span.type {
+    font-weight: bold;
 }
 
 table.legend {

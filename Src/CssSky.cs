@@ -49,8 +49,8 @@ td.right {
 
 .tree li {
     list-style-type: none;
-    text-indent: -3em;
-    padding-left: 3em;
+    text-indent: -1em;
+    padding-left: 1em;
 }
 
 .tree li div.namespace:before {
@@ -60,8 +60,10 @@ td.right {
     font-size: 8pt;
 }
 
-.indent {
-    margin-left: 2em;
+.tree li div.assembly {
+    margin-top: .7em;
+    font-weight: bold;
+    font-size: 16pt;
 }
 
 .Class:before, .Struct:before, .Enum:before, .Interface:before, .Delegate:before,
@@ -91,13 +93,17 @@ div.Field:before       { content: 'F'; background: #ee8; }
 
 table.legend { width: 100%; }
 
-.legend p {
+div.legend > p {
     font-variant: small-caps;
     text-align: center;
     margin: 0 -.7em;
     background: -moz-linear-gradient(#e8f0ff, #d0e0f8);
     background: linear-gradient(#e8f0ff, #d0e0f8);
     border-radius: 5px;
+}
+
+td.legend > div {
+    white-space: nowrap;
 }
 
 .content {
