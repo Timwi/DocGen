@@ -62,13 +62,17 @@ td {
 
 .boxy {
     display: inline-block;
-    margin-bottom: 1em;
+    margin: 1em 0;
     padding: .3em 1em;
 }
 
-.links, .auth {
+.boxy.links, .auth {
     font-variant: small-caps;
     text-align: center;
+}
+
+.boxy.tree {
+    display: block;
 }
 
 .tree ul {
