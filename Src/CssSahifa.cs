@@ -37,6 +37,11 @@ a {
         color: #1c69c0;
     }
 
+table.layout {
+    table-layout: fixed;
+    width: 100%;
+}
+
 td {
     vertical-align: top;
 }
@@ -45,7 +50,7 @@ td {
         padding-right: 1.5em;
         box-shadow: inset -4px 0px 9px -6px rgba(0,0,0,.3);
         text-align: center;
-        min-width: 20em;
+        width: 20em;
     }
 
         td.left > * {
@@ -53,7 +58,6 @@ td {
         }
 
     td.right {
-        width: 100%;
         padding: 3em 2em 10em;
     }
 
@@ -202,6 +206,10 @@ pre, code {
     font-family: ""Candara"", ""Segoe UI"", ""Verdana"", sans-serif;
 }
 
+    pre.monospace, code.monospace {
+        font-family: monospace !important;
+    }
+
 pre {
     background: #eee;
     padding: .7em 1.5em;
@@ -209,6 +217,7 @@ pre {
     border-top-right-radius: 20px;
     border-bottom-right-radius: 20px;
     font-size: 11pt;
+    overflow: auto;
 }
 
     pre, pre .Method, pre .Constructor {

@@ -24,6 +24,7 @@ namespace RT.DocGen
         private class namespaceInfo
         {
             public SortedDictionary<string, typeInfo> Types;
+            public IEnumerable<XNode> Documentation;
         }
 
         private class typeInfo
@@ -201,7 +202,14 @@ namespace RT.DocGen
                             XElement doc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == typeFullName);
 
                             if (!_namespaces.ContainsKey(namespc))
-                                _namespaces[namespc] = new namespaceInfo { Types = new SortedDictionary<string, typeInfo>() };
+                                _namespaces[namespc] = new namespaceInfo
+                                {
+                                    Types = new SortedDictionary<string, typeInfo>(),
+                                    Documentation = e.Element("members").Elements("member")
+                                        .FirstOrDefault(m => m.Attribute("name").Value == "T:{0}.NamespaceDocumentation".Fmt(namespc))
+                                        .NullOr(m => m.Element("summary"))
+                                        .NullOr(m => m.Nodes())
+                                };
 
                             var typeinfo = new typeInfo { Type = t, Documentation = doc, Members = new Dictionary<string, memberInfo>() };
 
@@ -1065,6 +1073,7 @@ namespace RT.DocGen
         {
             yield return new H1 { class_ = "namespace-heading" }._("Namespace: ", new SPAN { class_ = "namespace" }._(namespaceName));
             yield return new DIV { class_ = "innercontent" }._(
+                _namespaces[namespaceName].Documentation.NullOr(doc => new[] { interpretNodes(doc, req), new H2("Types in this namespace") }),
                 new TABLE { class_ = "doclist" }._(
                     _namespaces[namespaceName].Types.Where(t => !t.Value.Type.IsNested).Select(kvp => new TR(
                         new TD { class_ = "type" + (kvp.Value.Documentation == null ? " missing" : "") }._(
@@ -1684,6 +1693,8 @@ namespace RT.DocGen
 
             if (elem.Name == "para")
                 yield return new P(interpretNodes(elem.Nodes(), req));
+            else if (elem.Name == "heading")
+                yield return new H2(interpretNodes(elem.Nodes(), req));
             else if (elem.Name == "list" && elem.Attribute("type") != null && elem.Attribute("type").Value == "bullet")
                 yield return new UL(elem.Elements("item").Select(e =>
                     e.Elements("term").Any()
@@ -1701,34 +1712,49 @@ namespace RT.DocGen
                     )
                 ));
             else if (elem.Name == "code")
-                yield return new PRE(interpretPre(elem, req));
-            else if (elem.Name == "see" && elem.Attribute("cref") != null)
+                yield return new PRE { class_ = elem.Attribute("monospace").NullOr(a => a.Value) == "true" ? "monospace" : null }._(interpretPre(elem, req));
+            else if (elem.Name == "see" && elem.Attribute("cref") != null && elem.Value == "")
                 yield return interpretCref(elem.Attribute("cref").Value, req, false);
+            else if (elem.Name == "see" && elem.Attribute("cref") != null)
+            {
+                var cref = elem.Attribute("cref").Value;
+                yield return new A
+                {
+                    href = req.Url.WithPath("/" + cref.UrlEscape()).ToHref(),
+                    class_ = cref.StartsWith("T:") ? "Type" :
+                        cref.StartsWith("M:") ? "Method" :
+                        cref.StartsWith("P:") ? "Property" :
+                        cref.StartsWith("E:") ? "Event" :
+                        cref.StartsWith("F:") ? "Field" : null,
+                    title = cref.Substring(2)
+                }._(interpretNodes(elem.Nodes(), req));
+            }
             else if (elem.Name == "c")
                 yield return new CODE(interpretNodes(elem.Nodes(), req));
+            else if (elem.Name == "em")
+                yield return new EM(interpretNodes(elem.Nodes(), req));
             else if (elem.Name == "paramref" && elem.Attribute("name") != null)
                 yield return new SPAN { class_ = "parameter" }._(new EM(elem.Attribute("name").Value));
             else if (elem.Name == "typeparamref" && elem.Attribute("name") != null)
                 yield return new SPAN { class_ = "parameter" }._(new EM(elem.Attribute("name").Value));
             else
             {
-                yield return @"[Unrecognised tag: ""{0}""]".Fmt(elem.Name);
+                yield return @"[Unrecognized tag: ""{0}""]".Fmt(elem.Name);
                 yield return interpretNodes(elem.Nodes(), req);
             }
         }
 
         private object interpretCref(string token, HttpRequest req, bool includeNamespaces)
         {
-            Type actual;
-
             if (_types.ContainsKey(token))
                 return friendlyTypeName(_types[token].Type, includeNamespaces, includeOuterTypes: true, baseUrl: req.Url, span: true);
             else if (_members.ContainsKey(token))
                 return friendlyMemberName(_members[token].Member, containingType: true, parameterTypes: true, namespaces: includeNamespaces, url: req.Url.WithPath("/" + token.UrlEscape()).ToHref(), baseUrl: req.Url);
-            else if (token.StartsWith("T:") && (actual = Type.GetType(token.Substring(2), throwOnError: false, ignoreCase: true)) != null)
-                return new SPAN { title = actual.FullName }._(foreignTypeName(actual, includeNamespaces));
             else if (token.StartsWith("T:"))
-                return new SPAN { title = token.Substring(2) }._(foreignTypeName(token.Substring(2), includeNamespaces));
+            {
+                var actual = Type.GetType(token.Substring(2), throwOnError: false, ignoreCase: true);
+                return actual == null ? new SPAN { class_ = "Type", title = actual.FullName }._(foreignTypeName(actual, includeNamespaces)) : new SPAN { class_ = "Type", title = token.Substring(2) }._(foreignTypeName(token.Substring(2), includeNamespaces));
+            }
             else if (token.StartsWith("M:") || token.StartsWith("P:") || token.StartsWith("E:") || token.StartsWith("F:"))
             {
                 return new SPAN
@@ -1736,7 +1762,8 @@ namespace RT.DocGen
                     class_ = token.StartsWith("M:") ? "Method" :
                         token.StartsWith("P:") ? "Property" :
                         token.StartsWith("E:") ? "Event" :
-                        token.StartsWith("F:") ? "Field" : null
+                        token.StartsWith("F:") ? "Field" : null,
+                    title = token.Substring(2)
                 }._(
                     CrefParser.Parse(token.Substring(2))
                         .GetHtml(Assumption.Member,

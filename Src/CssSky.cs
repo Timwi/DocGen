@@ -15,14 +15,17 @@ body {
     margin-bottom: 10em;
 }
 
+table.layout {
+    table-layout: fixed;
+    width: 100%;
+}
+
 td {
     vertical-align: top;
 }
 td.left {
+    width: 20em;
     padding-right: 1.5em;
-}
-td.right {
-    width: 100%;
 }
 
 .boxy {
@@ -156,12 +159,17 @@ pre, code {
     font-family: ""Candara"", ""Segoe UI"", ""Verdana"", sans-serif;
 }
 
+    pre.monospace, code.monospace {
+        font-family: monospace !important;
+    }
+
 pre {
     background: #eee;
     padding: .7em 1.5em;
     border-left: 3px solid #8ad;
     border-top-right-radius: 20px;
     border-bottom-right-radius: 20px;
+    overflow: auto;
 }
 
 code {
