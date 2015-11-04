@@ -1753,7 +1753,9 @@ namespace RT.DocGen
             else if (token.StartsWith("T:"))
             {
                 var actual = Type.GetType(token.Substring(2), throwOnError: false, ignoreCase: true);
-                return actual == null ? new SPAN { class_ = "Type", title = actual.FullName }._(foreignTypeName(actual, includeNamespaces)) : new SPAN { class_ = "Type", title = token.Substring(2) }._(foreignTypeName(token.Substring(2), includeNamespaces));
+                return actual == null
+                    ? new SPAN { class_ = "Type", title = token.Substring(2) }._(foreignTypeName(token.Substring(2), includeNamespaces))
+                    : new SPAN { class_ = "Type", title = actual.FullName }._(foreignTypeName(actual, includeNamespaces));
             }
             else if (token.StartsWith("M:") || token.StartsWith("P:") || token.StartsWith("E:") || token.StartsWith("F:"))
             {
