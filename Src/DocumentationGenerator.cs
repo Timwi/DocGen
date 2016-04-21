@@ -21,6 +21,13 @@ namespace RT.DocGen
     /// </summary>
     public class DocumentationGenerator
     {
+        private class assemblyInfo
+        {
+            public Assembly Assembly;
+            public SortedDictionary<string, namespaceInfo> Namespaces = new SortedDictionary<string, namespaceInfo>();
+            public IEnumerable<XNode> Documentation;
+        }
+
         private class namespaceInfo
         {
             public SortedDictionary<string, typeInfo> Types;
@@ -85,7 +92,7 @@ namespace RT.DocGen
             }
         }
 
-        private SortedDictionary<string, namespaceInfo> _namespaces;
+        private SortedDictionary<string, assemblyInfo> _assemblies;
         private SortedDictionary<string, typeInfo> _types;
         private SortedDictionary<string, memberInfo> _members;
         private string _usernamePasswordFile;
@@ -162,7 +169,7 @@ namespace RT.DocGen
         public DocumentationGenerator(string[] paths, string usernamePasswordFile = null, string copyDllFilesTo = null)
         {
             _usernamePasswordFile = usernamePasswordFile;
-            _namespaces = new SortedDictionary<string, namespaceInfo>();
+            _assemblies = new SortedDictionary<string, assemblyInfo>();
             _types = new SortedDictionary<string, typeInfo>();
             _members = new SortedDictionary<string, memberInfo>();
 
@@ -194,6 +201,14 @@ namespace RT.DocGen
                         var docsFile = f.FullName.Remove(f.FullName.Length - 3) + "xml";
                         Assembly a = Assembly.LoadFile(loadFromFile);
                         XElement e = XElement.Load(docsFile);
+                        var ai = _assemblies[a.GetName().Name] = new assemblyInfo
+                        {
+                            Assembly = a,
+                            Documentation = e.Element("members").Elements("member")
+                                .FirstOrDefault(m => m.Attribute("name").Value == "T:AssemblyDocumentation")
+                                .NullOr(m => m.Element("summary"))
+                                .NullOr(m => m.Nodes())
+                        };
 
                         foreach (var t in a.GetExportedTypes().Where(t => shouldTypeBeDisplayed(t)))
                         {
@@ -201,8 +216,8 @@ namespace RT.DocGen
                             var namespc = t.Namespace ?? NoNamespaceName;
                             XElement doc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == typeFullName);
 
-                            if (!_namespaces.ContainsKey(namespc))
-                                _namespaces[namespc] = new namespaceInfo
+                            if (!ai.Namespaces.ContainsKey(namespc))
+                                ai.Namespaces[namespc] = new namespaceInfo
                                 {
                                     Types = new SortedDictionary<string, typeInfo>(),
                                     Documentation = e.Element("members").Elements("member")
@@ -232,7 +247,7 @@ namespace RT.DocGen
                                 _members[dcmn] = memDoc;
                             }
 
-                            _namespaces[namespc].Types[typeFullName] = typeinfo;
+                            ai.Namespaces[namespc].Types[typeFullName] = typeinfo;
                             _types[typeFullName] = typeinfo;
                         }
                     }
@@ -285,10 +300,12 @@ namespace RT.DocGen
                 if (session.Username == null && _usernamePasswordFile != null)
                     return HttpResponse.Redirect(req.Url.WithPath("/auth/login").WithQuery("returnto", req.Url.ToHref()));
 
+                string asm = null;
                 string ns = null;
                 Type type = null;
                 MemberInfo member = null;
                 string token = req.Url.Path.Substring(1).UrlUnescape();
+                var tokens = token.Split('/');
 
                 HttpStatusCode status = HttpStatusCode._200_OK;
                 string title;
@@ -304,16 +321,28 @@ namespace RT.DocGen
                     title = "All members";
                     content = generateAllMembers(req);
                 }
-                else if (_namespaces.ContainsKey(token))
+                else if (_assemblies.ContainsKey(token))
                 {
-                    ns = token;
+                    // If there is only one namespace in this assembly, no point in asking the user to choose one. Just redirect to it.
+                    if (_assemblies[token].Namespaces.Count == 1)
+                        return HttpResponse.Redirect(req.Url.WithPath("/" + token + "/" + _assemblies[token].Namespaces.First().Key));
+
+                    asm = token;
+                    title = "Assembly: " + asm;
+                    content = generateAssemblyDocumentation(asm, req);
+                }
+                else if (tokens.Length == 2 && _assemblies.ContainsKey(tokens[0]) && _assemblies[tokens[0]].Namespaces.ContainsKey(tokens[1]))
+                {
+                    asm = tokens[0];
+                    ns = tokens[1];
                     title = "Namespace: " + ns;
-                    content = generateNamespaceDocumentation(ns, req);
+                    content = generateNamespaceDocumentation(asm, ns, req);
                 }
                 else if (_types.ContainsKey(token))
                 {
                     type = _types[token].Type;
                     ns = type.Namespace ?? NoNamespaceName;
+                    asm = type.Assembly.GetName().Name;
                     title = type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : type.IsInterface ? "Interface: " : typeof(Delegate).IsAssignableFrom(type) ? "Delegate: " : "Class: ";
                     title += stringSoup(friendlyTypeName(type, includeOuterTypes: true));
                     content = generateTypeDocumentation(req, _types[token].Type, _types[token].Documentation);
@@ -323,6 +352,7 @@ namespace RT.DocGen
                     member = _members[token].Member;
                     type = member.DeclaringType;
                     ns = type.Namespace;
+                    asm = type.Assembly.GetName().Name;
                     title = getMemberTitle(member) + ": " + stringSoup(
                         member.MemberType == MemberTypes.Constructor ? friendlyTypeName(type, includeOuterTypes: true) :
                         member.MemberType == MemberTypes.Method ? cSharpCompatibleMethodName(member.Name) :
@@ -331,12 +361,12 @@ namespace RT.DocGen
                 }
                 else if (req.Url.Path == "/")
                 {
-                    // If there is only one namespace, no point in asking the user to choose one. Just redirect to it
-                    if (_namespaces.Count == 1)
-                        return HttpResponse.Redirect(req.Url.WithPath("/" + _namespaces.First().Key));
+                    // If there is only one assembly, no point in asking the user to choose it. Just redirect to it.
+                    if (_assemblies.Count == 1)
+                        return HttpResponse.Redirect(req.Url.WithPath("/" + _assemblies.First().Key));
 
                     title = null;
-                    content = new object[] { new H1("Welcome"), new DIV { class_ = "warning" }._("Select an item from the list on the left.") };
+                    content = new object[] { new H1("Welcome"), new DIV { class_ = "warning" }._("Select an assembly from the list on the left.") };
                 }
                 else
                 {
@@ -367,13 +397,13 @@ namespace RT.DocGen
                                         new A("All members") { href = req.Url.WithPath("/all:members").ToHref(), accesskey = "m", title = "Show all members [Alt-M]" }
                                     ),
                                     new DIV { class_ = "boxy tree" }._(
-                                        new UL(_types.Where(tkvp => !tkvp.Value.Type.IsNested).GroupBy(t => t.Value.Type.Assembly).OrderBy(asmg => asmg.Key.GetName().Name).Select(asmg => new LI(
-                                            new DIV { class_ = "assembly" }._(asmg.Key.GetName().Name),
-                                            new UL(asmg.GroupBy(tkvp => tkvp.Value.Type.Namespace).OrderBy(nsg => nsg.Key).Select(nsg => new LI(
-                                                new DIV { class_ = "namespace" + (nsg.Key == ns && type == null ? " highlighted" : null) }._(
-                                                    new A { href = req.Url.WithPath("/" + nsg.Key.UrlEscape()).ToHref() }._(nsg.Key)
+                                        new UL(_assemblies.OrderBy(asmKvp => asmKvp.Key != asm).Select(asmKvp => new LI(
+                                            new DIV { class_ = "assembly" }._(new A { href = req.Url.WithPath("/" + asmKvp.Key.UrlEscape()).ToHref(), class_ = "assembly" }._(asmKvp.Key)),
+                                            asm == null || asm != asmKvp.Key ? null : new UL(asmKvp.Value.Namespaces.Select(nsKvp => new LI(
+                                                new DIV { class_ = "namespace" + (nsKvp.Key == ns && type == null ? " highlighted" : null) }._(
+                                                    new A { href = req.Url.WithPath("/" + asmKvp.Key.UrlEscape() + "/" + nsKvp.Key.UrlEscape()).ToHref() }._(nsKvp.Key)
                                                 ),
-                                                ns == null || ns != nsg.Key ? null : new UL(nsg.OrderBy(tkvp => tkvp.Key).Select(tkvp => generateTypeBullet(tkvp.Key, member ?? type, req)))
+                                                ns == null || ns != nsKvp.Key ? null : new UL(nsKvp.Value.Types.Select(tkvp => generateTypeBullet(tkvp.Key, member ?? type, req)))
                                             )))
                                         )))
                                     ),
@@ -1069,13 +1099,37 @@ namespace RT.DocGen
             return isNestedTypeOf(nestedType.DeclaringType, containingType);
         }
 
-        private IEnumerable<object> generateNamespaceDocumentation(string namespaceName, HttpRequest req)
+        private IEnumerable<object> generateAssemblyDocumentation(string assemblyName, HttpRequest req)
         {
-            yield return new H1 { class_ = "namespace-heading" }._("Namespace: ", new SPAN { class_ = "namespace" }._(namespaceName));
+            var asm = _assemblies[assemblyName];
+            yield return new H1 { class_ = "assembly-heading" }._("Assembly: ", new SPAN { class_ = "assembly" }._(assemblyName));
             yield return new DIV { class_ = "innercontent" }._(
-                _namespaces[namespaceName].Documentation.NullOr(doc => new[] { interpretNodes(doc, req), new H2("Types in this namespace") }),
+                asm.Documentation.NullOr(doc => new[] { interpretNodes(doc, req), new H2("Namespaces in this assembly") }),
                 new TABLE { class_ = "doclist" }._(
-                    _namespaces[namespaceName].Types.Where(t => !t.Value.Type.IsNested).Select(kvp => new TR(
+                    asm.Namespaces.Select(kvp => new TR(
+                        new TD { class_ = "namespace" }._(
+                            new DIV { class_ = "namespace" }._(
+                                new A { class_ = "namespace", href = req.Url.WithPath("/" + assemblyName.UrlEscape() + "/" + kvp.Key.UrlEscape()).ToHref() }._(kvp.Key)
+                            )
+                        )
+                    ))
+                )
+            );
+        }
+
+        private IEnumerable<object> generateNamespaceDocumentation(string assemblyName, string namespaceName, HttpRequest req)
+        {
+            var ns = _assemblies[assemblyName].Namespaces[namespaceName];
+            yield return new H1 { class_ = "namespace-heading" }._("Namespace: ", new SPAN { class_ = "namespace" }._(namespaceName));
+
+            // Only show the link to the assembly if it has more than one namespace, because otherwise it’d just redirect straight back here
+            if (_assemblies[assemblyName].Namespaces.Count > 1)
+                yield return new DIV { class_ = "namespace-subheading" }._("Assembly: ", new A { class_ = "assembly", href = req.Url.WithPath("/" + assemblyName.UrlEscape()).ToHref() }._(assemblyName));
+
+            yield return new DIV { class_ = "innercontent" }._(
+                ns.Documentation.NullOr(doc => new[] { interpretNodes(doc, req), new H2("Types in this namespace") }),
+                new TABLE { class_ = "doclist" }._(
+                    ns.Types.Where(t => !t.Value.Type.IsNested).Select(kvp => new TR(
                         new TD { class_ = "type" + (kvp.Value.Documentation == null ? " missing" : "") }._(
                             new DIV { class_ = kvp.Value.GetTypeCssClass() }._(
                                 friendlyTypeName(kvp.Value.Type, span: true, baseUrl: req.Url)
@@ -1200,8 +1254,8 @@ namespace RT.DocGen
             bool isDelegate = typeof(Delegate).IsAssignableFrom(type);
 
             yield return new UL { class_ = "typeinfo" }._(
-                new LI("Assembly: ", new SPAN { class_ = "assembly" }._(type.Assembly.FullName)),
-                new LI("Namespace: ", new A { class_ = "namespace", href = req.Url.WithPath("/" + (type.Namespace ?? NoNamespaceName).UrlEscape()).ToHref() }._(type.Namespace)),
+                new LI("Assembly: ", new A { class_ = "assembly", href = req.Url.WithPath("/" + type.Assembly.GetName().Name.UrlEscape()).ToHref() }._(type.Assembly.FullName)),
+                new LI("Namespace: ", new A { class_ = "namespace", href = req.Url.WithPath("/" + type.Assembly.GetName().Name.UrlEscape() + "/" + (type.Namespace ?? NoNamespaceName).UrlEscape()).ToHref() }._(type.Namespace)),
                 type.IsNested ? new LI("Declared in: ", friendlyTypeName(type.DeclaringType, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url, span: true, namespaceSpan: true)) : null,
                 inheritsFrom(type, req),
                 implementsInterfaces(type, req),
@@ -1929,9 +1983,13 @@ namespace RT.DocGen
 
         public HttpResponse quickUrlFinder(HttpRequest req, string query, Func<string, string, bool> matcher)
         {
-            foreach (var inf in _members.Values)
-                if (matcher(inf.Member.Name, query))
-                    return HttpResponse.Redirect(req.Url.WithPathParent().WithPath("/" + documentationCompatibleMemberName(inf.Member).UrlEscape()).ToHref());
+            foreach (var namesp in _assemblies.SelectMany(asm => asm.Value.Namespaces.Keys.Select(ns => new { Namespace = ns, Assembly = asm.Key })))
+            {
+                var pos = namesp.Namespace.LastIndexOf('.');
+                var name = pos == -1 ? namesp.Namespace : namesp.Namespace.Substring(pos + 1);
+                if (matcher(name, query))
+                    return HttpResponse.Redirect(req.Url.WithPathParent().WithPath("/" + namesp.Assembly.UrlEscape() + "/" + namesp.Namespace.UrlEscape()).ToHref());
+            }
             foreach (var inf in _types.Values)
             {
                 var pos = inf.Type.Name.IndexOf('`');
@@ -1939,13 +1997,9 @@ namespace RT.DocGen
                 if (matcher(name, query))
                     return HttpResponse.Redirect(req.Url.WithPathParent().WithPath("/" + getTypeFullName(inf.Type).UrlEscape()).ToHref());
             }
-            foreach (var namesp in _namespaces.Keys)
-            {
-                var pos = namesp.LastIndexOf('.');
-                var name = pos == -1 ? namesp : namesp.Substring(pos + 1);
-                if (matcher(name, query))
-                    return HttpResponse.Redirect(req.Url.WithPathParent().WithPath("/" + namesp.UrlEscape()).ToHref());
-            }
+            foreach (var inf in _members.Values)
+                if (matcher(inf.Member.Name, query))
+                    return HttpResponse.Redirect(req.Url.WithPathParent().WithPath("/" + documentationCompatibleMemberName(inf.Member).UrlEscape()).ToHref());
             return null;
         }
     }

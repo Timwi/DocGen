@@ -21,7 +21,7 @@ namespace RT.DocGen
     color: #148;
 }
 
-h1 .type, h1 .Method, h1 .Constructor, h1 .Property, h1 .Event, h1 .Field, h1 .Class, h1 .Struct, h1 .Enum, h1 .Interface, h1 .Delegate, h1 .namespace, h1 .parameter {
+h1 .type, h1 .Method, h1 .Constructor, h1 .Property, h1 .Event, h1 .Field, h1 .Class, h1 .Struct, h1 .Enum, h1 .Interface, h1 .Delegate, h1 .assembly, h1 .namespace, h1 .parameter {
     font-size: 20pt;
 }
 
@@ -126,7 +126,7 @@ div.Field:before { content: 'F'; border-color: hsl(60, 75%, 70%); color: hsl(60,
     border: none;
 }
 
-.tree li div.assembly {
+.tree li div.assembly a.assembly {
     margin-top: .7em;
     font-weight: bold;
     font-size: 16pt;
@@ -193,6 +193,11 @@ h1 {
     h1.namespace-heading .namespace {
         color: #114488;
         font-weight: bold;
+    }
+
+    div.namespace-subheading {
+        margin-top: -1em;
+        margin-bottom: 2em;
     }
 
 h2 {
