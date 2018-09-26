@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using RT.TagSoup;
 using RT.Util;
 using RT.Util.ExtensionMethods;
-using RT.TagSoup;
 
 namespace RT.DocGen
 {
@@ -31,6 +31,7 @@ namespace RT.DocGen
         public TokenType Type { get; private set; }
         public string Item { get; private set; }
         public Token(TokenType type, string item = null) { Type = type; Item = item; }
+        public override string ToString() => $"{Type}{(Item != null ? " " : null)}{Item}";
     }
 
     enum GenericParameterSource { Type, Method }
@@ -68,7 +69,7 @@ namespace RT.DocGen
         protected override int getGenericCount()
         {
             return
-                (Name.Contains('`') ? Convert.ToInt32(Name.Substring(Name.IndexOf('`') + 1)) : 0) +
+                (Name.Contains("``") ? Convert.ToInt32(Name.Substring(Name.IndexOf("``") + 2)) : Name.Contains('`') ? Convert.ToInt32(Name.Substring(Name.IndexOf('`') + 1)) : 0) +
                 (Parent == null ? 0 : getGenericCount(Parent));
         }
         public override object GetHtml(Assumption assumption, Func<MemberInfo, object> memberHtml, Func<Type, object> typeHtml)
@@ -78,21 +79,21 @@ namespace RT.DocGen
                 return typeHtml(type);
 
             var nameWithoutGen = Name.Contains('`') ? Name.Substring(0, Name.IndexOf('`')) : Name;
-            var numGen = Name.Contains('`') ? Convert.ToInt32(Name.Substring(Name.IndexOf('`') + 1)) : 0;
+            var numGen = Name.Contains("``") ? Convert.ToInt32(Name.Substring(Name.IndexOf("``") + 2)) : Name.Contains('`') ? Convert.ToInt32(Name.Substring(Name.IndexOf('`') + 1)) : 0;
             switch (assumption)
             {
                 case Assumption.Member:
                     object mname = new STRONG(nameWithoutGen);
                     if (numGen > 0)
                         mname = new[] { mname, "<", Enumerable.Range(0, numGen).Select(i => "TM" + (i + 1)).JoinString(", "), ">" };
-                    return Parent == null ? (object) mname : new object[] { Parent.GetHtml(Assumption.Type, memberHtml, typeHtml), ".", mname };
+                    return Parent == null ? mname : new object[] { Parent.GetHtml(Assumption.Type, memberHtml, typeHtml), ".", mname };
 
                 case Assumption.Type:
                     object tname = Name;
                     if (numGen > 0)
                         tname = new[] { tname, "<", Enumerable.Range(getGenericCount(Parent), numGen).Select(i => "T" + (i + 1)).JoinString(", "), ">" };
                     var parentHtml = Parent.NullOr(p => p.GetHtml(Assumption.None, memberHtml, typeHtml));
-                    return Parent == null || parentHtml == null ? (object) tname : new object[] { parentHtml, ".", tname };
+                    return Parent == null || parentHtml == null ? tname : new object[] { parentHtml, ".", tname };
 
                 default:
                     if (Name.Contains('`'))
@@ -207,7 +208,7 @@ namespace RT.DocGen
     static class CrefParser
     {
         private static Regex _lexer = new Regex(@"
-                (?<name>(?!\d)\w+(?:`\d+)?)|   # name, optionally with number of generics
+                (?<name>(?!\d)\w+(?:``?\d+)?)|   # name, optionally with number of generics
                 (?<mg>``\d+)|                             # method generic parameter
                 (?<tg>`\d+)|                                # type generic parameter
                 (?<array>\[\])|                            # array
