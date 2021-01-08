@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Reflection;
 using System.Text;
+using RT.PostBuild;
 using RT.PropellerApi;
 using RT.Util;
 using RT.Util.ExtensionMethods;
@@ -21,7 +22,7 @@ namespace RT.DocGen
             catch { }
 
             if (args.Length == 2 && args[0] == "--post-build-check")
-                return Ut.RunPostBuildChecks(args[1], Assembly.GetExecutingAssembly());
+                return PostBuildChecker.RunPostBuildChecks(args[1], Assembly.GetExecutingAssembly());
 
             Console.BackgroundColor = IsDebug ? ConsoleColor.DarkBlue : ConsoleColor.DarkRed;
             Console.ForegroundColor = ConsoleColor.White;

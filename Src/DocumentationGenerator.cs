@@ -12,7 +12,6 @@ using RT.Servers;
 using RT.TagSoup;
 using RT.Util;
 using RT.Util.ExtensionMethods;
-using RT.Util.Json;
 
 namespace RT.DocGen
 {
@@ -21,59 +20,35 @@ namespace RT.DocGen
     /// </summary>
     public class DocumentationGenerator
     {
-        private class assemblyInfo
+        private class DocAssemblyInfo
         {
             public Assembly Assembly;
-            public SortedDictionary<string, namespaceInfo> Namespaces = new SortedDictionary<string, namespaceInfo>();
+            public SortedDictionary<string, DocNamespaceInfo> Namespaces = new SortedDictionary<string, DocNamespaceInfo>();
             public IEnumerable<XNode> Documentation;
         }
 
-        private class namespaceInfo
+        private class DocNamespaceInfo
         {
-            public SortedDictionary<string, typeInfo> Types;
+            public SortedDictionary<string, DocTypeInfo> Types;
             public IEnumerable<XNode> Documentation;
         }
 
-        private class typeInfo
+        private class DocTypeInfo
         {
             public Type Type;
             public XElement Documentation;
-            public Dictionary<string, memberInfo> Members;
-
-            internal string GetTypeLetters()
-            {
-                if (Type.IsInterface)
-                    return "In";
-                if (Type.IsEnum)
-                    return "En";
-                if (typeof(Delegate).IsAssignableFrom(Type))
-                    return "De";
-                if (Type.IsValueType)
-                    return "St";
-                return "Cl";
-            }
-
-            internal string GetTypeCssClass()
-            {
-                if (Type.IsInterface)
-                    return "Interface";
-                if (Type.IsEnum)
-                    return "Enum";
-                if (typeof(Delegate).IsAssignableFrom(Type))
-                    return "Delegate";
-                if (Type.IsValueType)
-                    return "Struct";
-                return "Class";
-            }
+            public Dictionary<string, DocMemberInfo> Members;
+            internal string TypeLetters => Type.IsInterface ? "In" : Type.IsEnum ? "En" : typeof(Delegate).IsAssignableFrom(Type) ? "De" : Type.IsValueType ? "St" : "Cl";
+            internal string TypeCssClass => Type.IsInterface ? "Interface" : Type.IsEnum ? "Enum" : typeof(Delegate).IsAssignableFrom(Type) ? "Delegate" : Type.IsValueType ? "Struct" : "Class";
         }
 
-        private class memberInfo
+        private class DocMemberInfo
         {
             public MemberInfo Member;
             public XElement Documentation;
         }
 
-        private class docGenSession : FileSession
+        private class DocGenSession : FileSession
         {
             public string Username;
             public override void CleanUp(HttpResponse response, bool wasModified)
@@ -92,10 +67,10 @@ namespace RT.DocGen
             }
         }
 
-        private SortedDictionary<string, assemblyInfo> _assemblies;
-        private SortedDictionary<string, typeInfo> _types;
-        private SortedDictionary<string, memberInfo> _members;
-        private string _usernamePasswordFile;
+        private SortedDictionary<string, DocAssemblyInfo> _assemblies;
+        private SortedDictionary<string, DocTypeInfo> _types;
+        private SortedDictionary<string, DocMemberInfo> _members;
+        private readonly string _usernamePasswordFile;
         private List<string> _assembliesLoaded = new List<string>();
         public List<string> AssembliesLoaded { get { return _assembliesLoaded; } }
         private List<Tuple<string, string>> _assemblyLoadErrors = new List<Tuple<string, string>>();
@@ -103,10 +78,10 @@ namespace RT.DocGen
 
         private const string NoNamespaceName = "<no namespace>";
 
-        private class memberComparer : IComparer<MemberInfo>
+        private class DocMemberComparer : IComparer<MemberInfo>
         {
-            private memberComparer() { }
-            public static readonly memberComparer Instance = new memberComparer();
+            private DocMemberComparer() { }
+            public static readonly DocMemberComparer Instance = new DocMemberComparer();
 
             private char getTypeChar(MemberInfo member)
             {
@@ -169,9 +144,9 @@ namespace RT.DocGen
         public DocumentationGenerator(string[] paths, string usernamePasswordFile = null, string copyDllFilesTo = null)
         {
             _usernamePasswordFile = usernamePasswordFile;
-            _assemblies = new SortedDictionary<string, assemblyInfo>();
-            _types = new SortedDictionary<string, typeInfo>();
-            _members = new SortedDictionary<string, memberInfo>();
+            _assemblies = new SortedDictionary<string, DocAssemblyInfo>();
+            _types = new SortedDictionary<string, DocTypeInfo>();
+            _members = new SortedDictionary<string, DocMemberInfo>();
 
             foreach (var path in paths)
             {
@@ -184,13 +159,11 @@ namespace RT.DocGen
                 AppDomain.CurrentDomain.AssemblyResolve += (s, e) =>
                 {
                     var actualAssemblyName = new AssemblyName(e.Name).Name;
-                    var prospectiveAssemblyPath = Path.Combine(copyDllFilesTo == null ? path : copyDllFilesTo, actualAssemblyName + ".dll");
+                    var prospectiveAssemblyPath = Path.Combine(copyDllFilesTo ?? path, actualAssemblyName + ".dll");
                     if (File.Exists(prospectiveAssemblyPath))
                         return Assembly.LoadFrom(prospectiveAssemblyPath);
-                    prospectiveAssemblyPath = Path.Combine(copyDllFilesTo == null ? path : copyDllFilesTo, actualAssemblyName + ".exe");
-                    if (File.Exists(prospectiveAssemblyPath))
-                        return Assembly.LoadFrom(prospectiveAssemblyPath);
-                    return null;
+                    prospectiveAssemblyPath = Path.Combine(copyDllFilesTo ?? path, actualAssemblyName + ".exe");
+                    return File.Exists(prospectiveAssemblyPath) ? Assembly.LoadFrom(prospectiveAssemblyPath) : null;
                 };
 
                 foreach (var f in dllFiles.Where(f => File.Exists(f.FullName.Remove(f.FullName.Length - 3) + "xml")))
@@ -201,7 +174,7 @@ namespace RT.DocGen
                         var docsFile = f.FullName.Remove(f.FullName.Length - 3) + "xml";
                         Assembly a = Assembly.LoadFile(loadFromFile);
                         XElement e = XElement.Load(docsFile);
-                        var ai = _assemblies[a.GetName().Name] = new assemblyInfo
+                        var ai = _assemblies[a.GetName().Name] = new DocAssemblyInfo
                         {
                             Assembly = a,
                             Documentation = e.Element("members").Elements("member")
@@ -217,16 +190,16 @@ namespace RT.DocGen
                             XElement doc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == typeFullName);
 
                             if (!ai.Namespaces.ContainsKey(namespc))
-                                ai.Namespaces[namespc] = new namespaceInfo
+                                ai.Namespaces[namespc] = new DocNamespaceInfo
                                 {
-                                    Types = new SortedDictionary<string, typeInfo>(),
+                                    Types = new SortedDictionary<string, DocTypeInfo>(),
                                     Documentation = e.Element("members").Elements("member")
                                         .FirstOrDefault(m => m.Attribute("name").Value == "T:{0}.NamespaceDocumentation".Fmt(namespc))
                                         .NullOr(m => m.Element("summary"))
                                         .NullOr(m => m.Nodes())
                                 };
 
-                            var typeinfo = new typeInfo { Type = t, Documentation = doc, Members = new Dictionary<string, memberInfo>() };
+                            var typeinfo = new DocTypeInfo { Type = t, Documentation = doc, Members = new Dictionary<string, DocMemberInfo>() };
 
                             foreach (var mem in t.GetMembers(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
                                 .Where(m => m.DeclaringType == t && shouldMemberBeDisplayed(m)))
@@ -242,7 +215,7 @@ namespace RT.DocGen
                                         mdoc = new XElement("member", new XAttribute("name", dcmn), new XElement("summary", "Creates a new instance of ", new XElement("see", new XAttribute("cref", typeFullName)), "."));
                                 }
 
-                                var memDoc = new memberInfo { Member = mem, Documentation = mdoc };
+                                var memDoc = new DocMemberInfo { Member = mem, Documentation = mdoc };
                                 typeinfo.Members[dcmn] = memDoc;
                                 _members[dcmn] = memDoc;
                             }
@@ -283,153 +256,150 @@ namespace RT.DocGen
                     _resolver.Add(new UrlMapping(path: "/css/" + css.Key, specificPath: true, handler: req => HttpResponse.Create(css.Value, "text/css; charset=utf-8")));
                 _resolver.Add(new UrlMapping(path: "/q", handler: quickUrl));
                 if (_usernamePasswordFile != null)
-                    _resolver.Add(new UrlMapping(path: "/auth", handler: req => Session.EnableManual<docGenSession>(req, session => _authenticator.Handle(req, session.Username, session.SetUsername))));
+                    _resolver.Add(new UrlMapping(path: "/auth", handler: req => Session.EnableManual<DocGenSession>(req, session => _authenticator.Handle(req, session.Username, session.SetUsername))));
                 _resolver.Add(new UrlMapping(handler: handle));
             }
 
             return _resolver.Handle(request);
         }
 
-        private HttpResponse handle(HttpRequest req)
-        {
-            if (req.Url.Path == "")
-                return HttpResponse.Redirect(req.Url.WithPath("/"));
-
-            return Session.EnableManual<docGenSession>(req, session =>
-            {
-                if (session.Username == null && _usernamePasswordFile != null)
-                    return HttpResponse.Redirect(req.Url.WithPath("/auth/login").WithQuery("returnto", req.Url.ToHref()));
-
-                string asm = null;
-                string ns = null;
-                Type type = null;
-                MemberInfo member = null;
-                string token = req.Url.Path.Substring(1).UrlUnescape();
-                var tokens = token.Split('/');
-
-                HttpStatusCode status = HttpStatusCode._200_OK;
-                string title;
-                object content;
-
-                if (req.Url.Path == "/all:types")
+        private HttpResponse handle(HttpRequest req) =>
+            req.Url.Path == ""
+                ? HttpResponse.Redirect(req.Url.WithPath("/"))
+                : Session.EnableManual<DocGenSession>(req, session =>
                 {
-                    title = "All types";
-                    content = generateAllTypes(req);
-                }
-                else if (req.Url.Path == "/all:members")
-                {
-                    title = "All members";
-                    content = generateAllMembers(req);
-                }
-                else if (_assemblies.ContainsKey(token))
-                {
-                    // If there is only one namespace in this assembly, no point in asking the user to choose one. Just redirect to it.
-                    if (_assemblies[token].Namespaces.Count == 1)
-                        return HttpResponse.Redirect(req.Url.WithPath("/" + token + "/" + _assemblies[token].Namespaces.First().Key));
+                    if (session.Username == null && _usernamePasswordFile != null)
+                        return HttpResponse.Redirect(req.Url.WithPath("/auth/login").WithQuery("returnto", req.Url.ToHref()));
 
-                    asm = token;
-                    title = "Assembly: " + asm;
-                    content = generateAssemblyDocumentation(asm, req);
-                }
-                else if (tokens.Length == 2 && _assemblies.ContainsKey(tokens[0]) && _assemblies[tokens[0]].Namespaces.ContainsKey(tokens[1]))
-                {
-                    asm = tokens[0];
-                    ns = tokens[1];
-                    title = "Namespace: " + ns;
-                    content = generateNamespaceDocumentation(asm, ns, req);
-                }
-                else if (_types.ContainsKey(token))
-                {
-                    type = _types[token].Type;
-                    ns = type.Namespace ?? NoNamespaceName;
-                    asm = type.Assembly.GetName().Name;
-                    title = type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : type.IsInterface ? "Interface: " : typeof(Delegate).IsAssignableFrom(type) ? "Delegate: " : "Class: ";
-                    title += stringSoup(friendlyTypeName(type, includeOuterTypes: true));
-                    content = generateTypeDocumentation(req, _types[token].Type, _types[token].Documentation);
-                }
-                else if (_members.ContainsKey(token))
-                {
-                    member = _members[token].Member;
-                    type = member.DeclaringType;
-                    ns = type.Namespace;
-                    asm = type.Assembly.GetName().Name;
-                    title = getMemberTitle(member) + ": " + stringSoup(
-                        member.MemberType == MemberTypes.Constructor ? friendlyTypeName(type, includeOuterTypes: true) :
-                        member.MemberType == MemberTypes.Method ? cSharpCompatibleMethodName(member.Name) :
-                        member.Name);
-                    content = generateMemberDocumentation(req, _members[token].Member, _members[token].Documentation);
-                }
-                else if (req.Url.Path == "/")
-                {
-                    // If there is only one assembly, no point in asking the user to choose it. Just redirect to it.
-                    if (_assemblies.Count == 1)
-                        return HttpResponse.Redirect(req.Url.WithPath("/" + _assemblies.First().Key));
+                    string asm = null;
+                    string ns = null;
+                    Type type = null;
+                    MemberInfo member = null;
+                    string token = req.Url.Path.Substring(1).UrlUnescape();
+                    var tokens = token.Split('/');
 
-                    title = null;
-                    content = new object[] { new H1("Welcome"), new DIV { class_ = "warning" }._("Select an assembly from the list on the left.") };
-                }
-                else
-                {
-                    title = "Not found";
-                    content = new object[] { new H1("Not found"), new DIV { class_ = "warning" }._("This item is not documented.") };
-                    status = HttpStatusCode._404_NotFound;
-                }
+                    HttpStatusCode status = HttpStatusCode._200_OK;
+                    string title;
+                    object content;
 
-                if (title != null && title.Length > 0)
-                    title += " — ";
-                title += "XML documentation";
+                    if (req.Url.Path == "/all:types")
+                    {
+                        title = "All types";
+                        content = generateAllTypes(req);
+                    }
+                    else if (req.Url.Path == "/all:members")
+                    {
+                        title = "All members";
+                        content = generateAllMembers(req);
+                    }
+                    else if (_assemblies.ContainsKey(token))
+                    {
+                        // If there is only one namespace in this assembly, no point in asking the user to choose one. Just redirect to it.
+                        if (_assemblies[token].Namespaces.Count == 1)
+                            return HttpResponse.Redirect(req.Url.WithPath("/" + token + "/" + _assemblies[token].Namespaces.First().Key));
 
-                var skin = req.Url["skin"];
-                if (skin == null || !_csses.Any(f => f.Key == skin))
-                    skin = "Sahifa";
+                        asm = token;
+                        title = "Assembly: " + asm;
+                        content = generateAssemblyDocumentation(asm, req);
+                    }
+                    else if (tokens.Length == 2 && _assemblies.ContainsKey(tokens[0]) && _assemblies[tokens[0]].Namespaces.ContainsKey(tokens[1]))
+                    {
+                        asm = tokens[0];
+                        ns = tokens[1];
+                        title = "Namespace: " + ns;
+                        content = generateNamespaceDocumentation(asm, ns, req);
+                    }
+                    else if (_types.ContainsKey(token))
+                    {
+                        type = _types[token].Type;
+                        ns = type.Namespace ?? NoNamespaceName;
+                        asm = type.Assembly.GetName().Name;
+                        title = type.IsEnum ? "Enum: " : type.IsValueType ? "Struct: " : type.IsInterface ? "Interface: " : typeof(Delegate).IsAssignableFrom(type) ? "Delegate: " : "Class: ";
+                        title += stringSoup(friendlyTypeName(type, includeOuterTypes: true));
+                        content = generateTypeDocumentation(req, _types[token].Type, _types[token].Documentation);
+                    }
+                    else if (_members.ContainsKey(token))
+                    {
+                        member = _members[token].Member;
+                        type = member.DeclaringType;
+                        ns = type.Namespace;
+                        asm = type.Assembly.GetName().Name;
+                        title = getMemberTitle(member) + ": " + stringSoup(
+                            member.MemberType == MemberTypes.Constructor ? friendlyTypeName(type, includeOuterTypes: true) :
+                            member.MemberType == MemberTypes.Method ? cSharpCompatibleMethodName(member.Name) :
+                            member.Name);
+                        content = generateMemberDocumentation(req, _members[token].Member, _members[token].Documentation);
+                    }
+                    else if (req.Url.Path == "/")
+                    {
+                        // If there is only one assembly, no point in asking the user to choose it. Just redirect to it.
+                        if (_assemblies.Count == 1)
+                            return HttpResponse.Redirect(req.Url.WithPath("/" + _assemblies.First().Key));
 
-                var html = new HTML(
-                    new HEAD(
-                        new TITLE(title),
-                        new LINK { href = req.Url.WithPathOnly("/css/" + skin).ToHref(), rel = "stylesheet", type = "text/css" }
-                    ),
-                    new BODY(
-                        new TABLE { class_ = "layout" }._(
-                            new TR(
-                                new TD { class_ = "left" }._(
-                                    new DIV { class_ = "boxy links" }._(
-                                        new A("All types") { href = req.Url.WithPath("/all:types").ToHref(), accesskey = "t", title = "Show all types [Alt-T]" }, new SPAN { class_ = "sep" }._("|"),
-                                        new A("All members") { href = req.Url.WithPath("/all:members").ToHref(), accesskey = "m", title = "Show all members [Alt-M]" }
-                                    ),
-                                    new DIV { class_ = "boxy tree" }._(
-                                        new UL(_assemblies.OrderBy(asmKvp => asmKvp.Key != asm).Select(asmKvp => new LI(
-                                            new DIV { class_ = "assembly" }._(new A { href = req.Url.WithPath("/" + asmKvp.Key.UrlEscape()).ToHref(), class_ = "assembly" }._(asmKvp.Key)),
-                                            asm == null || asm != asmKvp.Key ? null : new UL(asmKvp.Value.Namespaces.Select(nsKvp => new LI(
-                                                new DIV { class_ = "namespace" + (nsKvp.Key == ns && type == null ? " highlighted" : null) }._(
-                                                    new A { href = req.Url.WithPath("/" + asmKvp.Key.UrlEscape() + "/" + nsKvp.Key.UrlEscape()).ToHref() }._(nsKvp.Key)
-                                                ),
-                                                ns == null || ns != nsKvp.Key ? null : new UL(nsKvp.Value.Types.Select(tkvp => generateTypeBullet(tkvp.Key, member ?? type, req)))
+                        title = null;
+                        content = new object[] { new H1("Welcome"), new DIV { class_ = "warning" }._("Select an assembly from the list on the left.") };
+                    }
+                    else
+                    {
+                        title = "Not found";
+                        content = new object[] { new H1("Not found"), new DIV { class_ = "warning" }._("This item is not documented.") };
+                        status = HttpStatusCode._404_NotFound;
+                    }
+
+                    if (title != null && title.Length > 0)
+                        title += " — ";
+                    title += "XML documentation";
+
+                    var skin = req.Url["skin"];
+                    if (skin == null || !_csses.Any(f => f.Key == skin))
+                        skin = "Sahifa";
+
+                    var html = new HTML(
+                        new HEAD(
+                            new TITLE(title),
+                            new LINK { href = req.Url.WithPathOnly("/css/" + skin).ToHref(), rel = "stylesheet", type = "text/css" }
+                        ),
+                        new BODY(
+                            new TABLE { class_ = "layout" }._(
+                                new TR(
+                                    new TD { class_ = "left" }._(
+                                        new DIV { class_ = "boxy links" }._(
+                                            new A("All types") { href = req.Url.WithPath("/all:types").ToHref(), accesskey = "t", title = "Show all types [Alt-T]" }, new SPAN { class_ = "sep" }._("|"),
+                                            new A("All members") { href = req.Url.WithPath("/all:members").ToHref(), accesskey = "m", title = "Show all members [Alt-M]" }
+                                        ),
+                                        new DIV { class_ = "boxy tree" }._(
+                                            new UL(_assemblies.OrderBy(asmKvp => asmKvp.Key != asm).Select(asmKvp => new LI(
+                                                new DIV { class_ = "assembly" }._(new A { href = req.Url.WithPath("/" + asmKvp.Key.UrlEscape()).ToHref(), class_ = "assembly" }._(asmKvp.Key)),
+                                                asm == null || asm != asmKvp.Key ? null : new UL(asmKvp.Value.Namespaces.Select(nsKvp => new LI(
+                                                    new DIV { class_ = "namespace" + (nsKvp.Key == ns && type == null ? " highlighted" : null) }._(
+                                                        new A { href = req.Url.WithPath("/" + asmKvp.Key.UrlEscape() + "/" + nsKvp.Key.UrlEscape()).ToHref() }._(nsKvp.Key)
+                                                    ),
+                                                    ns == null || ns != nsKvp.Key ? null : new UL(nsKvp.Value.Types.Select(tkvp => generateTypeBullet(tkvp.Key, member ?? type, req)))
+                                                )))
                                             )))
-                                        )))
-                                    ),
-                                    new DIV { class_ = "boxy legend" }._(
-                                        new P("Legend"),
-                                        new TABLE { class_ = "legend" }._(
-                                            new TR(
-                                                new[] { new[] { "Class", "Struct", "Enum", "Interface", "Delegate" }, new[] { "Constructor", "Method", "Property", "Event", "Field" } }
-                                                    .Select(arr => new TD { class_ = "legend" }._(arr.Select(x => new DIV { class_ = x }._(x))))
+                                        ),
+                                        new DIV { class_ = "boxy legend" }._(
+                                            new P("Legend"),
+                                            new TABLE { class_ = "legend" }._(
+                                                new TR(
+                                                    new[] { new[] { "Class", "Struct", "Enum", "Interface", "Delegate" }, new[] { "Constructor", "Method", "Property", "Event", "Field" } }
+                                                        .Select(arr => new TD { class_ = "legend" }._(arr.Select(x => new DIV { class_ = x }._(x))))
+                                                )
                                             )
+                                        ),
+                                        _usernamePasswordFile == null ? null : new DIV { class_ = "boxy auth" }._(
+                                            new A("Log out") { href = req.Url.WithPath("/auth/logout").ToHref() }, new SPAN { class_ = "sep" }._("|"),
+                                            new A("Change password") { href = req.Url.WithPath("/auth/changepassword").WithQuery("returnto", req.Url.ToHref()).ToHref() }
                                         )
                                     ),
-                                    _usernamePasswordFile == null ? null : new DIV { class_ = "boxy auth" }._(
-                                        new A("Log out") { href = req.Url.WithPath("/auth/logout").ToHref() }, new SPAN { class_ = "sep" }._("|"),
-                                        new A("Change password") { href = req.Url.WithPath("/auth/changepassword").WithQuery("returnto", req.Url.ToHref()).ToHref() }
-                                    )
-                                ),
-                                new TD { class_ = "right" }._(new DIV { class_ = "boxy content" }._(content))
+                                    new TD { class_ = "right" }._(new DIV { class_ = "boxy content" }._(content))
+                                )
                             )
                         )
-                    )
-                );
+                    );
 
-                return HttpResponse.Html(html, status);
-            });
-        }
+                    return HttpResponse.Html(html, status);
+                });
 
         private IEnumerable<object> generateAllTypes(HttpRequest req)
         {
@@ -579,10 +549,9 @@ namespace RT.DocGen
                 if (wbrs)
                     ret = addWbrs((string) ret);
 
-                if (baseUrl != null && !t.IsGenericParameter && _types.ContainsKey(getTypeFullName(t)))
-                    yield return new A { href = baseUrl.WithPath("/" + getTypeFullName(t).UrlEscape()).ToHref() }._(ret);
-                else
-                    yield return ret;
+                yield return baseUrl != null && !t.IsGenericParameter && _types.ContainsKey(getTypeFullName(t))
+                    ? new A { href = baseUrl.WithPath("/" + getTypeFullName(t).UrlEscape()).ToHref() }._(ret)
+                    : ret;
 
                 if (hasGenericTypeParameters)
                 {
@@ -619,7 +588,7 @@ namespace RT.DocGen
                 containingType ? friendlyTypeName(m.DeclaringType, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly, subst: subst, wbrs: wbrs) : null,
                 containingType ? "." : null,
                 m.MemberType == MemberTypes.Property
-                ? (object) friendlyPropertyName((PropertyInfo) m, parameterTypes, parameterNames, namespaces, indent, url, baseUrl, stringOnly, subst, wbrs)
+                ? friendlyPropertyName((PropertyInfo) m, parameterTypes, parameterNames, namespaces, indent, url, baseUrl, stringOnly, subst, wbrs)
                     : stringOnly ? (object) m.Name : new STRONG { class_ = "member-name" }._(url == null ? (object) m.Name : new A { href = url }._(m.Name))
             );
             return stringOnly ? (object) stringSoup(arr) : new SPAN { class_ = m.MemberType.ToString(), title = stringSoup(friendlyMemberName(m, true, true, true, true, true, stringOnly: true)) }._(arr);
@@ -737,12 +706,11 @@ namespace RT.DocGen
                     }
                 yield return "0x" + Convert.ToInt64(val).ToString("x");
             }
-            else if (t == typeof(string))
-                yield return "\"" + val.ToString().CLiteralEscape() + "\"";
-            else if (t == typeof(bool))
-                yield return val.ToString().ToLower();
             else
-                yield return val.ToString();
+                yield return
+                    t == typeof(string) ? "\"" + val.ToString().CLiteralEscape() + "\"" :
+                    t == typeof(bool) ? val.ToString().ToLower() :
+                    val.ToString();
         }
 
         private static string[] _operators = Ut.NewArray(
@@ -825,27 +793,15 @@ namespace RT.DocGen
             return Regex.Matches(name, @"[\p{Ll}\p{Lm}\p{Lo}\p{N}\p{Pc}]+|[\p{Lu}\p{Lt}]+[\p{Ll}\p{Lm}\p{Lo}\p{N}\p{Pc}]*").Cast<Match>().Select(m => m.Value).InsertBetween<object>(new WBR());
         }
 
-        private bool shouldMemberBeDisplayed(MemberInfo m)
-        {
-            if (m.ReflectedType.IsEnum && m.Name == "value__")
-                return false;
-            if (m.MemberType == MemberTypes.Constructor)
-                return !(m as ConstructorInfo).IsPrivate;
-            if (m.MemberType == MemberTypes.Method)
-                return !(m as MethodInfo).IsPrivate && !isPropertyGetterOrSetter(m) && !isEventAdderOrRemover(m);
-            if (m.MemberType == MemberTypes.Event)
-                return ((m as EventInfo).GetAddMethod() != null && !(m as EventInfo).GetAddMethod().IsPrivate) ||
-                    ((m as EventInfo).GetRemoveMethod() != null && !(m as EventInfo).GetRemoveMethod().IsPrivate);
-            if (m.MemberType == MemberTypes.Property)
-                return ((m as PropertyInfo).GetGetMethod() != null && !(m as PropertyInfo).GetGetMethod().IsPrivate) ||
-                    ((m as PropertyInfo).GetSetMethod() != null && !(m as PropertyInfo).GetSetMethod().IsPrivate);
-            if (m.MemberType == MemberTypes.Field)
-                return !(m as FieldInfo).IsPrivate && !isEventField(m);
-            if (m.MemberType == MemberTypes.NestedType)
-                return shouldTypeBeDisplayed((Type) m);
-
-            return false;
-        }
+        private bool shouldMemberBeDisplayed(MemberInfo m) =>
+            m.ReflectedType.IsEnum && m.Name == "value__" ? false :
+                m.MemberType == MemberTypes.Constructor ? !(m as ConstructorInfo).IsPrivate :
+                m.MemberType == MemberTypes.Method ? !(m as MethodInfo).IsPrivate && !isPropertyGetterOrSetter(m) && !isEventAdderOrRemover(m) :
+                m.MemberType == MemberTypes.Event ? ((m as EventInfo).GetAddMethod() != null && !(m as EventInfo).GetAddMethod().IsPrivate) || ((m as EventInfo).GetRemoveMethod() != null && !(m as EventInfo).GetRemoveMethod().IsPrivate) :
+                m.MemberType == MemberTypes.Property ? ((m as PropertyInfo).GetGetMethod() != null && !(m as PropertyInfo).GetGetMethod().IsPrivate) || ((m as PropertyInfo).GetSetMethod() != null && !(m as PropertyInfo).GetSetMethod().IsPrivate) :
+                m.MemberType == MemberTypes.Field ? !(m as FieldInfo).IsPrivate && !isEventField(m) :
+                m.MemberType == MemberTypes.NestedType ? shouldTypeBeDisplayed((Type) m) :
+                false;
 
         private bool shouldTypeBeDisplayed(Type t)
         {
@@ -945,8 +901,7 @@ namespace RT.DocGen
 
             if (parameterType.IsGenericParameter)
             {
-                Type output;
-                if (genericSubstitutions != null && genericSubstitutions.TryGetValue(parameterType, out output))
+                if (genericSubstitutions != null && genericSubstitutions.TryGetValue(parameterType, out var output))
                     return stringifyParameterType(output, type, method, genericSubstitutions);
 
                 int i = 0;
@@ -1011,12 +966,10 @@ namespace RT.DocGen
             return member.DeclaringType.GetMembers().Any(m => m.MemberType == MemberTypes.Event && m.Name == partName);
         }
 
-        private bool isEventField(MemberInfo member)
-        {
-            if (member.MemberType != MemberTypes.Field)
-                return false;
-            return member.DeclaringType.GetMembers().Any(m => m.MemberType == MemberTypes.Event && m.Name == member.Name);
-        }
+        private bool isEventField(MemberInfo member) =>
+            member.MemberType != MemberTypes.Field
+                ? false
+                : member.DeclaringType.GetMembers().Any(m => m.MemberType == MemberTypes.Event && m.Name == member.Name);
 
         private bool isPublic(MemberInfo member)
         {
@@ -1064,14 +1017,14 @@ namespace RT.DocGen
         private object generateTypeBullet(string typeFullName, MemberInfo selectedMember, HttpRequest req)
         {
             var typeinfo = _types[typeFullName];
-            string cssClass = typeinfo.GetTypeCssClass();
+            string cssClass = typeinfo.TypeCssClass;
             if (typeinfo.Documentation == null) cssClass += " missing";
             if (typeinfo.Type == selectedMember) cssClass += " highlighted";
             return new LI { class_ = "type" }._(
                 new DIV { class_ = cssClass }._(friendlyTypeName(typeinfo.Type, span: true, wbrs: true, baseUrl: req.Url)),
                 selectedMember != null && !typeof(Delegate).IsAssignableFrom(typeinfo.Type) && isMemberInside(selectedMember, typeinfo.Type)
                     ? new UL(typeinfo.Members.Where(mkvp => isPublic(mkvp.Value.Member))
-                        .OrderBy(mkvp => mkvp.Value.Member, memberComparer.Instance)
+                        .OrderBy(mkvp => mkvp.Value.Member, DocMemberComparer.Instance)
                         .Select(mkvp =>
                         {
                             if (mkvp.Value.Member.MemberType == MemberTypes.NestedType)
@@ -1090,14 +1043,7 @@ namespace RT.DocGen
             return isNestedTypeOf(member is Type ? (Type) member : member.DeclaringType, containingType);
         }
 
-        private bool isNestedTypeOf(Type nestedType, Type containingType)
-        {
-            if (nestedType == containingType)
-                return true;
-            if (!nestedType.IsNested)
-                return false;
-            return isNestedTypeOf(nestedType.DeclaringType, containingType);
-        }
+        private bool isNestedTypeOf(Type nestedType, Type containingType) => nestedType == containingType ? true : !nestedType.IsNested ? false : isNestedTypeOf(nestedType.DeclaringType, containingType);
 
         private IEnumerable<object> generateAssemblyDocumentation(string assemblyName, HttpRequest req)
         {
@@ -1131,13 +1077,13 @@ namespace RT.DocGen
                 new TABLE { class_ = "doclist" }._(
                     ns.Types.Where(t => !t.Value.Type.IsNested).Select(kvp => new TR(
                         new TD { class_ = "type" + (kvp.Value.Documentation == null ? " missing" : "") }._(
-                            new DIV { class_ = kvp.Value.GetTypeCssClass() }._(
+                            new DIV { class_ = kvp.Value.TypeCssClass }._(
                                 friendlyTypeName(kvp.Value.Type, span: true, baseUrl: req.Url)
                             )
                         ),
                         new TD(
                             kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
-                                ? (object) new EM("This type is not documented.")
+                                ? new EM("This type is not documented.")
                                 : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req),
                             kvp.Value.Documentation == null || kvp.Value.Documentation.Element("remarks") == null
                                 ? null
@@ -1326,20 +1272,20 @@ namespace RT.DocGen
                     // Remove types that are not in our scope
                     .Where(ti => _types.ContainsKey(getTypeFullName(ti.Type)))
                     // Get all the members of this type and all base types
-                    .SelectMany(ti => _types[getTypeFullName(ti.Type)].Members.Select(m => new { InheritedFrom = ti.Type, Substitutions = ti.Substitutions, MemberName = m.Key, Member = m.Value.Member, Documentation = m.Value.Documentation }))
+                    .SelectMany(ti => _types[getTypeFullName(ti.Type)].Members.Select(m => new { InheritedFrom = ti.Type, ti.Substitutions, MemberName = m.Key, m.Value.Member, m.Value.Documentation }))
                     // Filter out internal members and inherited constructors
                     .Where(inf => isPublic(inf.Member) && (inf.InheritedFrom == type || inf.Member.MemberType != MemberTypes.Constructor))
                     // For chains of virtual overrides, only use the least derived member (the “base” method/property/event)
-                    .GroupBy(mbr => mbr.Member.IfType((MethodInfo m) => m.GetBaseDefinition(), (PropertyInfo p) => p.GetBaseDefinition(), (EventInfo e) => e.GetBaseDefinition(), m => m))
+                    .GroupBy(mbr => mbr.Member is MethodInfo m ? m.GetBaseDefinition() : mbr.Member is PropertyInfo p ? p.GetBaseDefinition() : mbr.Member is EventInfo e ? e.GetBaseDefinition() : mbr.Member)
                     .Select(g => g.First())
                     // Find out which inherited members are hidden by less derived members of the same signature
                     .GroupBy(mbr => documentationCompatibleMemberName(mbr.Member, type, mbr.Substitutions))
-                    .Select(gr => new { LeastDerived = gr.First(), Hides = gr.Skip(1).Select(hide => new hideInfo(hide.Member, hide.MemberName, hide.Substitutions)).ToArray() })
+                    .Select(gr => new { LeastDerived = gr.First(), Hides = gr.Skip(1).Select(hide => new DocHideInfo(hide.Member, hide.MemberName, hide.Substitutions)).ToArray() })
                     .Select(gr => new { gr.LeastDerived.Documentation, gr.LeastDerived.InheritedFrom, gr.LeastDerived.Member, gr.LeastDerived.MemberName, gr.LeastDerived.Substitutions, gr.Hides })
                     // Sorting
-                    .OrderBy(inf => inf.Member, memberComparer.Instance)
+                    .OrderBy(inf => inf.Member, DocMemberComparer.Instance)
                     // Group by the sections we want on the page (constructors, events, fields, methods, operators, properties, nested types, etc.etc.)
-                    .GroupBy(inf => new { MemberType = inf.Member.MemberType, IsStatic = isStatic(inf.Member), IsOperator = inf.Member.MemberType == MemberTypes.Method && _operators.Contains(inf.Member.Name) }))
+                    .GroupBy(inf => new { inf.Member.MemberType, IsStatic = isStatic(inf.Member), IsOperator = inf.Member.MemberType == MemberTypes.Method && _operators.Contains(inf.Member.Name) }))
                 {
                     var isEnumValues = group.Key.MemberType == MemberTypes.Field && group.Key.IsStatic && type.IsEnum;
 
@@ -1371,7 +1317,7 @@ namespace RT.DocGen
                                     )
                                 ),
                             new TD { class_ = "member" }._(
-                                new DIV { class_ = "withicon " + (inf.Member.MemberType == MemberTypes.NestedType ? _types[inf.MemberName].GetTypeCssClass() : inf.Member.MemberType.ToString()) }._(
+                                new DIV { class_ = "withicon " + (inf.Member.MemberType == MemberTypes.NestedType ? _types[inf.MemberName].TypeCssClass : inf.Member.MemberType.ToString()) }._(
                                     friendlyMemberName(inf.Member, parameterTypes: true, parameterNames: true, parameterDefaultValues: true, url: req.Url.WithPath("/" + inf.MemberName.UrlEscape()).ToHref(), baseUrl: req.Url, subst: inf.Substitutions)
                                 ),
                                 formatMemberExtraInfo(req, inf.Member, false, inf.InheritedFrom == type ? null : inf.InheritedFrom, inf.Substitutions, inf.Hides)
@@ -1379,7 +1325,7 @@ namespace RT.DocGen
                             isEnumValues ? new TD { class_ = "numeric" }._(((FieldInfo) inf.Member).GetRawConstantValue()) : null,
                             index > 0 ? null : new TD { class_ = "documentation", rowspan = gr.Count }._(
                                 inf.Documentation == null || inf.Documentation.Element("summary") == null
-                                    ? (object) new EM(gr.Count > 1 ? "These members are not documented." : "This member is not documented.")
+                                    ? new EM(gr.Count > 1 ? "These members are not documented." : "This member is not documented.")
                                     : interpretNodes(inf.Documentation.Element("summary").Nodes(), req),
                                 inf.Documentation == null || inf.Documentation.Element("remarks") == null
                                     ? null
@@ -1391,12 +1337,12 @@ namespace RT.DocGen
             }
         }
 
-        private sealed class hideInfo
+        private sealed class DocHideInfo
         {
             public MemberInfo Member { get; private set; }
             public string MemberName { get; private set; }
             public Dictionary<Type, Type> Substitutions { get; private set; }
-            public hideInfo(MemberInfo member, string memberName, Dictionary<Type, Type> substitutions)
+            public DocHideInfo(MemberInfo member, string memberName, Dictionary<Type, Type> substitutions)
             {
                 Member = member;
                 MemberName = memberName;
@@ -1410,7 +1356,7 @@ namespace RT.DocGen
             var parameterInfos = Enumerable.Range(0, parameters.Length).Select(i => new
             {
                 Parameter = parameters[i],
-                Documentation = methodDocumentation == null ? null : methodDocumentation.Elements("param")
+                Documentation = methodDocumentation?.Elements("param")
                         .FirstOrDefault(xe => xe.Attribute("name") != null && xe.Attribute("name").Value == parameters[i].Name)
             }).ToArray();
 
@@ -1429,7 +1375,7 @@ namespace RT.DocGen
                             new STRONG { class_ = "member-name parameter" }._(pi.Parameter.Name)
                         ),
                         new TD { class_ = "documentation" }._(pi.Documentation == null
-                            ? (object) new EM("This parameter is not documented.")
+                            ? new EM("This parameter is not documented.")
                             : interpretNodes(pi.Documentation.Nodes(), req))
                     );
                 })
@@ -1448,20 +1394,19 @@ namespace RT.DocGen
                 return false;
 
             // We do not compare the /content/ of remarks tags, but we want to merge summaries only if both have or both don’t have a remarks tag
-            if ((doc1.Element("remarks") == null) != (doc2.Element("remarks") == null))
-                return false;
-
-            return XNode.DeepEquals(doc1.Element("summary"), doc2.Element("summary"));
+            return (doc1.Element("remarks") == null) != (doc2.Element("remarks") == null)
+                ? false
+                : XNode.DeepEquals(doc1.Element("summary"), doc2.Element("summary"));
         }
 
-        private IEnumerable<object> formatMemberExtraInfo(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst, hideInfo[] hides)
+        private IEnumerable<object> formatMemberExtraInfo(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst, DocHideInfo[] hides)
         {
             var listItems = formatMemberExtraInfoItems(req, member, markInterfaceMethods, inheritedFrom, subst, hides).ToList();
             if (listItems.Count > 0)
                 yield return new UL { class_ = "extra" }._(listItems);
         }
 
-        private IEnumerable<object> formatMemberExtraInfoItems(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst, hideInfo[] hides)
+        private IEnumerable<object> formatMemberExtraInfoItems(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst, DocHideInfo[] hides)
         {
             if (inheritedFrom != null)
                 yield return new LI("Inherited from ", friendlyTypeName(inheritedFrom, includeOuterTypes: true, baseUrl: req.Url, span: true, subst: subst));
@@ -1492,7 +1437,7 @@ namespace RT.DocGen
 
             MemberInfo baseDefinition = method.GetBaseDefinition();
             var basePropOrEvent = baseDefinition == null ? null :
-                (MemberInfo) baseDefinition.DeclaringType.GetProperties().FirstOrDefault(p => p.GetGetMethod() == baseDefinition || p.GetSetMethod() == baseDefinition) ??
+                 baseDefinition.DeclaringType.GetProperties().FirstOrDefault(p => p.GetGetMethod() == baseDefinition || p.GetSetMethod() == baseDefinition) ??
                 (MemberInfo) baseDefinition.DeclaringType.GetEvents().FirstOrDefault(e => e.GetAddMethod() == baseDefinition || e.GetRemoveMethod() == baseDefinition);
             if (basePropOrEvent != null)
                 baseDefinition = basePropOrEvent;
@@ -1507,11 +1452,9 @@ namespace RT.DocGen
                 if (baseDefinition != member)
                 {
                     string url = null;
-                    var baseDefinitionWithoutGenerics = baseDefinition.IfType(
+                    var baseDefinitionWithoutGenerics =
                         // Dirty hack, but simplest way I could find to retrieve the uninstantiated MethodInfo
-                        (MethodInfo mi) => mi.ContainsGenericParameters ? MethodInfo.GetMethodFromHandle(mi.MethodHandle, mi.DeclaringType.GetGenericTypeDefinition().TypeHandle) : mi,
-                        mi => mi
-                    );
+                        baseDefinition is MethodInfo mi ? (mi.ContainsGenericParameters ? MethodInfo.GetMethodFromHandle(mi.MethodHandle, mi.DeclaringType.GetGenericTypeDefinition().TypeHandle) : mi) : baseDefinition;
                     var dcmn = documentationCompatibleMemberName(baseDefinitionWithoutGenerics);
                     if (_members.ContainsKey(dcmn))
                         url = req.Url.WithPath("/" + dcmn.UrlEscape()).ToHref();
@@ -1529,7 +1472,7 @@ namespace RT.DocGen
                     {
                         string url = null;
                         var interfaceMember =
-                            (MemberInfo) interf.GetProperties().FirstOrDefault(p => p.GetGetMethod() == map.InterfaceMethods[index] || p.GetSetMethod() == map.InterfaceMethods[index]) ??
+                             interf.GetProperties().FirstOrDefault(p => p.GetGetMethod() == map.InterfaceMethods[index] || p.GetSetMethod() == map.InterfaceMethods[index]) ??
                             (MemberInfo) interf.GetEvents().FirstOrDefault(e => e.GetAddMethod() == map.InterfaceMethods[index] || e.GetRemoveMethod() == map.InterfaceMethods[index]) ??
                             map.InterfaceMethods[index];
                         var interfaceMemberDefinition = findMemberDefinition(interfaceMember);
@@ -1626,54 +1569,42 @@ namespace RT.DocGen
             return true;
         }
 
-        private LI inheritsFrom(Type type, HttpRequest req)
-        {
-            if ((type.IsAbstract && type.IsSealed) || type.IsInterface)
-                return null;
+        private LI inheritsFrom(Type type, HttpRequest req) =>
+            (type.IsAbstract && type.IsSealed) || type.IsInterface
+                ? null
+                : new LI(
+                    new A("Show inherited types...") { href = "#", onclick = "document.getElementById('inherited_link').style.display='none';document.getElementById('inherited_tree').style.display='block';return false;", id = "inherited_link" },
+                    new DIV { id = "inherited_tree", style = "display:none" }._(
+                        "Inherits from:",
+                        inheritsFromBullet(type.BaseType, req)));
 
-            return new LI(
-                new A("Show inherited types...") { href = "#", onclick = "document.getElementById('inherited_link').style.display='none';document.getElementById('inherited_tree').style.display='block';return false;", id = "inherited_link" },
-                new DIV { id = "inherited_tree", style = "display:none" }._(
-                    "Inherits from:",
-                    inheritsFromBullet(type.BaseType, req)
-                ));
-        }
-
-        private object inheritsFromBullet(Type type, HttpRequest req)
-        {
-            if (type == null)
-                return null;
-            return new UL(new LI(friendlyTypeName(type, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url, span: true), type.IsSealed ? " (sealed)" : null, inheritsFromBullet(type.BaseType, req)));
-        }
+        private object inheritsFromBullet(Type type, HttpRequest req) => type == null
+            ? null
+            : new UL(new LI(friendlyTypeName(type, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url, span: true), type.IsSealed ? " (sealed)" : null, inheritsFromBullet(type.BaseType, req)));
 
         private LI implementsInterfaces(Type type, HttpRequest req)
         {
             var infs = type.GetInterfaces();
-            if (!infs.Any())
-                return null;
-            return new LI(
-                new A("Show implemented interfaces...") { href = "#", onclick = "document.getElementById('implements_link').style.display='none';document.getElementById('implements_tree').style.display='block';return false;", id = "implements_link" },
-                new DIV { id = "implements_tree", style = "display:none" }._(
-                    "Implements:", new UL(infs
-                        .Select(i => new { Interface = i, Directly = type.BaseType == null || !type.BaseType.GetInterfaces().Any(i2 => i2.Equals(i)) })
-                        .OrderBy(inf => inf.Directly ? 0 : 1).ThenBy(inf => inf.Interface.Name)
-                        .Select(inf => new LI(friendlyTypeName(inf.Interface, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url, span: true), inf.Directly ? " (directly)" : null))
-                    )
-                )
-            );
+            return !infs.Any()
+                ? null
+                : new LI(
+                    new A("Show implemented interfaces...") { href = "#", onclick = "document.getElementById('implements_link').style.display='none';document.getElementById('implements_tree').style.display='block';return false;", id = "implements_link" },
+                    new DIV { id = "implements_tree", style = "display:none" }._(
+                        "Implements:", new UL(infs
+                            .Select(i => new { Interface = i, Directly = type.BaseType == null || !type.BaseType.GetInterfaces().Any(i2 => i2.Equals(i)) })
+                            .OrderBy(inf => inf.Directly ? 0 : 1).ThenBy(inf => inf.Interface.Name)
+                            .Select(inf => new LI(friendlyTypeName(inf.Interface, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url, span: true), inf.Directly ? " (directly)" : null)))));
         }
 
         private LI implementedBy(Type type, HttpRequest req)
         {
             var implementedBy = _types.Select(kvp => kvp.Value.Type).Where(t => t.GetInterfaces().Any(i => i.Equals(type) || (i.IsGenericType && i.GetGenericTypeDefinition().Equals(type)))).ToArray();
-            if (!implementedBy.Any())
-                return null;
-            return new LI(
-                new A("Show types that implement this interface...") { href = "#", onclick = "document.getElementById('implementedby_link').style.display='none';document.getElementById('implementedby_tree').style.display='block';return false;", id = "implementedby_link" },
-                new DIV { id = "implementedby_tree", style = "display:none" }._(
-                    "Implemented by:", new UL(implementedBy.Select(t => new LI(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url, span: true))))
-                )
-            );
+            return !implementedBy.Any()
+                ? null
+                : new LI(
+                    new A("Show types that implement this interface...") { href = "#", onclick = "document.getElementById('implementedby_link').style.display='none';document.getElementById('implementedby_tree').style.display='block';return false;", id = "implementedby_link" },
+                    new DIV { id = "implementedby_tree", style = "display:none" }._(
+                        "Implemented by:", new UL(implementedBy.Select(t => new LI(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url, span: true))))));
         }
 
         private LI derivedTypes(Type type, HttpRequest req)
@@ -1681,15 +1612,13 @@ namespace RT.DocGen
             var derivedTypes = _types.Select(kvp => kvp.Value.Type)
                 .Where(t => t.BaseType == type || (t.BaseType != null && t.BaseType.IsGenericType && t.BaseType.GetGenericTypeDefinition() == type))
                 .ToArray();
-            if (!derivedTypes.Any())
-                return null;
 
-            return new LI(
-                new A("Show derived types...") { href = "#", onclick = "document.getElementById('derivedtypes_link').style.display='none';document.getElementById('derivedtypes_tree').style.display='block';return false;", id = "derivedtypes_link" },
-                new DIV { id = "derivedtypes_tree", style = "display:none" }._(
-                    "Derived types:", new UL(derivedTypes.Select(t => new LI(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url, span: true))))
-                )
-            );
+            return !derivedTypes.Any()
+                ? null
+                : new LI(
+                    new A("Show derived types...") { href = "#", onclick = "document.getElementById('derivedtypes_link').style.display='none';document.getElementById('derivedtypes_tree').style.display='block';return false;", id = "derivedtypes_link" },
+                    new DIV { id = "derivedtypes_tree", style = "display:none" }._(
+                        "Derived types:", new UL(derivedTypes.Select(t => new LI(friendlyTypeName(t, includeNamespaces: true, includeOuterTypes: true, baseUrl: req.Url, span: true))))));
         }
 
         private IEnumerable<object> generateGenericTypeParameterTable(HttpRequest req, XElement document, Type[] genericTypeArguments)
@@ -1701,11 +1630,12 @@ namespace RT.DocGen
                 genericTypeArguments.Select(gta =>
                 {
                     var constraints = gta.GetGenericParameterConstraints();
-                    var docElem = document == null ? null : document.Elements("typeparam")
-                        .Where(xe => xe.Attribute("name") != null && xe.Attribute("name").Value == gta.Name).FirstOrDefault();
+                    var docElem = document?.Elements("typeparam")
+                        .Where(xe => xe.Attribute("name") != null && xe.Attribute("name").Value == gta.Name)
+                        .FirstOrDefault();
                     return new TR(
                         new TD { class_ = "member" }._(new STRONG { class_ = "generic-parameter member-name" }._(gta.Name), formatGenericConstraints(req, constraints, gta.GenericParameterAttributes)),
-                        new TD { class_ = "documentation" }._(docElem == null ? (object) new EM("This type parameter is not documented.") : interpretNodes(docElem.Nodes(), req))
+                        new TD { class_ = "documentation" }._(docElem == null ? new EM("This type parameter is not documented.") : interpretNodes(docElem.Nodes(), req))
                     );
                 })
             );
@@ -1811,35 +1741,25 @@ namespace RT.DocGen
                     ? new SPAN { class_ = "Type", title = token.Substring(2) }._(foreignTypeName(token.Substring(2), includeNamespaces))
                     : new SPAN { class_ = "Type", title = actual.FullName }._(foreignTypeName(actual, includeNamespaces));
             }
-            else if (token.StartsWith("M:") || token.StartsWith("P:") || token.StartsWith("E:") || token.StartsWith("F:"))
-            {
-                return new SPAN
+
+            return token.StartsWith("M:") || token.StartsWith("P:") || token.StartsWith("E:") || token.StartsWith("F:")
+                ? new SPAN
                 {
                     class_ = token.StartsWith("M:") ? "Method" :
-                        token.StartsWith("P:") ? "Property" :
-                        token.StartsWith("E:") ? "Event" :
-                        token.StartsWith("F:") ? "Field" : null,
+                                    token.StartsWith("P:") ? "Property" :
+                                    token.StartsWith("E:") ? "Event" :
+                                    token.StartsWith("F:") ? "Field" : null,
                     title = token.Substring(2)
                 }._(
                     CrefParser.Parse(token.Substring(2))
                         .GetHtml(Assumption.Member,
                             member => friendlyMemberName(member, containingType: true, parameterTypes: true),
-                            type => friendlyTypeName(type, includeOuterTypes: true, inclRef: true, span: true))
-                );
-            }
-            else
-                return new SPAN { title = token.Substring(2) }._("[Unrecognized cref attribute]");
+                            type => friendlyTypeName(type, includeOuterTypes: true, inclRef: true, span: true)))
+                : new SPAN { title = token.Substring(2) }._("[Unrecognized cref attribute]");
         }
 
-        private object foreignTypeName(Type type, bool includeNamespaces)
-        {
-            return new SPAN { class_ = "type" }._(foreignTypeNameInner(type, includeNamespaces));
-        }
-
-        private object foreignTypeName(string type, bool includeNamespaces)
-        {
-            return new SPAN { class_ = "type" }._(foreignTypeNameInner(type, includeNamespaces));
-        }
+        private object foreignTypeName(Type type, bool includeNamespaces) => new SPAN { class_ = "type" }._(foreignTypeNameInner(type, includeNamespaces));
+        private object foreignTypeName(string type, bool includeNamespaces) => new SPAN { class_ = "type" }._(foreignTypeNameInner(type, includeNamespaces));
 
         private IEnumerable<object> foreignTypeNameInner(Type type, bool includeNamespaces)
         {
@@ -1923,15 +1843,8 @@ namespace RT.DocGen
                     return null;
 
                 // If the first item is not a string, the indentation is zero.
-                var first = lin.First() as string;
-                if (first == null)
-                    return 0;
-
                 // If the first item is an empty string, assume it’s the only item, so it’s a blank line
-                if (first == "")
-                    return null;
-
-                return first.TakeWhile(c => c == ' ').Count();
+                return lin.First() is string first ? (first == "" ? null : (int?) first.TakeWhile(c => c == ' ').Count()) : 0;
             });
 
             // If the common indentation exists and is greater than 0, we know that every line must start with a string.

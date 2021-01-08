@@ -6,8 +6,8 @@ using RT.PropellerApi;
 using RT.Servers;
 using RT.Util;
 using RT.Util.ExtensionMethods;
-using RT.Util.Json;
-using RT.Util.Serialization;
+using RT.Json;
+using RT.Serialization;
 
 namespace RT.DocGen
 {

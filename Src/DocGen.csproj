@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>RT.DocGen</RootNamespace>
     <AssemblyName>DocGen</AssemblyName>
-    <TargetFrameworkVersion>v4.7.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <OutputPath>..\Builds\$(Configuration)</OutputPath>
     <IntermediateOutputPath>..\Builds\$(Configuration)\obj-$(AssemblyName)</IntermediateOutputPath>
@@ -52,16 +52,32 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\RT.Servers\Src\RT.Servers.csproj">
-      <Project>{A7333C19-56A9-4A8E-A196-7648666EF26A}</Project>
-      <Name>Servers</Name>
+      <Project>{a7333c19-56a9-4a8e-a196-7648666ef26a}</Project>
+      <Name>RT.Servers</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\RT.TagSoup\Src\RT.TagSoup.csproj">
       <Project>{8F80D916-8999-45D8-ACB2-FFA7E2698FD6}</Project>
       <Name>TagSoup</Name>
     </ProjectReference>
-    <ProjectReference Include="..\..\RT.Util\Src\RT.Util.csproj">
+    <ProjectReference Include="..\..\RT.Util\RT.Json\RT.Json.csproj">
+      <Project>{d0b6651e-1217-40d0-a9db-4c13efa2d995}</Project>
+      <Name>RT.Json</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\RT.Util\RT.PostBuild\RT.PostBuild.csproj">
+      <Project>{dccefec3-788d-498a-99ba-15f916211206}</Project>
+      <Name>RT.PostBuild</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\RT.Util\RT.Serialization.Json\RT.Serialization.Json.csproj">
+      <Project>{c8abacfd-d2c0-4f8a-a935-a89551489c2a}</Project>
+      <Name>RT.Serialization.Json</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\RT.Util\RT.Serialization\RT.Serialization.csproj">
+      <Project>{395c570c-1bc1-4fe9-bb42-55f871190268}</Project>
+      <Name>RT.Serialization</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\RT.Util\RT.Util.Core\RT.Util.Core.csproj">
       <Project>{8D0FE79C-AD8D-475C-9E6F-9CAE85365B5D}</Project>
-      <Name>Util</Name>
+      <Name>RT.Util.Core</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\Propeller\API\PropellerApi.csproj">
       <Project>{5770EE79-8340-41FB-9B8E-EB4A3C487FF1}</Project>
@@ -72,7 +88,7 @@
   <PropertyGroup>
     <PostBuildEvent>"$(TargetPath)" --post-build-check "$(SolutionDir)."</PostBuildEvent>
   </PropertyGroup>
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
   </Target>
