@@ -623,7 +623,7 @@ namespace RT.DocGen
                         if (!m.DeclaringType.IsInterface)
                             yield return "abstract ";
                     }
-                    else if (m is MethodInfo mthInf && ((MethodInfo) m).GetBaseDefinition() != m)
+                    else if (m is MethodInfo mthInf && mthInf.GetBaseDefinition() != m)
                     {
                         if (m.IsFinal)
                             yield return "sealed ";
@@ -1310,10 +1310,10 @@ namespace RT.DocGen
                             inf.Member.MemberType == MemberTypes.Constructor || inf.Member.MemberType == MemberTypes.NestedType || isEnumValues ? null :
                                 new TD { class_ = "membertype" }._(
                                     friendlyTypeName(
-                                        inf.Member is EventInfo ? ((EventInfo) inf.Member).EventHandlerType :
-                                        inf.Member is FieldInfo ? ((FieldInfo) inf.Member).FieldType :
-                                        inf.Member is MethodInfo ? ((MethodInfo) inf.Member).ReturnType :
-                                        inf.Member is PropertyInfo ? ((PropertyInfo) inf.Member).PropertyType : null,
+                                        inf.Member is EventInfo evInf ? evInf.EventHandlerType :
+                                        inf.Member is FieldInfo fldInf ? fldInf.FieldType :
+                                        inf.Member is MethodInfo mthInf ? mthInf.ReturnType :
+                                        inf.Member is PropertyInfo propInf ? propInf.PropertyType : null,
                                         includeOuterTypes: true, baseUrl: req.Url, span: true, subst: inf.Substitutions
                                     )
                                 ),
