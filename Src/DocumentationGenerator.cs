@@ -374,7 +374,7 @@ namespace RT.DocGen
                                                     new DIV { class_ = "namespace" + (nsKvp.Key == ns && type == null ? " highlighted" : null) }._(
                                                         new A { href = req.Url.WithPath("/" + asmKvp.Key.UrlEscape() + "/" + nsKvp.Key.UrlEscape()).ToHref() }._(nsKvp.Key)
                                                     ),
-                                                    ns == null || ns != nsKvp.Key ? null : new UL(nsKvp.Value.Types.Select(tkvp => generateTypeBullet(tkvp.Key, member ?? type, req)))
+                                                    ns == null || ns != nsKvp.Key ? null : new UL(nsKvp.Value.Types.Where(tKvp => !tKvp.Value.Type.IsNested).Select(tkvp => generateTypeBullet(tkvp.Key, member ?? type, req)))
                                                 )))
                                             )))
                                         ),
@@ -623,7 +623,7 @@ namespace RT.DocGen
                         if (!m.DeclaringType.IsInterface)
                             yield return "abstract ";
                     }
-                    else if (m is MethodInfo && ((MethodInfo) m).GetBaseDefinition() != m)
+                    else if (m is MethodInfo mthInf && ((MethodInfo) m).GetBaseDefinition() != m)
                     {
                         if (m.IsFinal)
                             yield return "sealed ";
@@ -810,6 +810,7 @@ namespace RT.DocGen
 
         private string documentationCompatibleMemberName(MemberInfo m, Type reflectedType = null, Dictionary<Type, Type> genericSubstitutionsForHidingDetection = null)
         {
+            m = findMemberDefinition(m);
             StringBuilder sb = new StringBuilder();
             if (m.MemberType == MemberTypes.Method || m.MemberType == MemberTypes.Constructor)
             {
@@ -1320,13 +1321,15 @@ namespace RT.DocGen
                                 new DIV { class_ = "withicon " + (inf.Member.MemberType == MemberTypes.NestedType ? _types[inf.MemberName].TypeCssClass : inf.Member.MemberType.ToString()) }._(
                                     friendlyMemberName(inf.Member, parameterTypes: true, parameterNames: true, parameterDefaultValues: true, url: req.Url.WithPath("/" + inf.MemberName.UrlEscape()).ToHref(), baseUrl: req.Url, subst: inf.Substitutions)
                                 ),
-                                formatMemberExtraInfo(req, inf.Member, false, inf.InheritedFrom == type ? null : inf.InheritedFrom, inf.Substitutions, inf.Hides)
+                                formatMemberExtraInfo(req, inf.Member, inf.InheritedFrom == type ? null : inf.InheritedFrom, inf.Substitutions, inf.Hides)
                             ),
                             isEnumValues ? new TD { class_ = "numeric" }._(((FieldInfo) inf.Member).GetRawConstantValue()) : null,
                             index > 0 ? null : new TD { class_ = "documentation", rowspan = gr.Count }._(
-                                inf.Documentation == null || inf.Documentation.Element("summary") == null
-                                    ? new EM(gr.Count > 1 ? "These members are not documented." : "This member is not documented.")
-                                    : interpretNodes(inf.Documentation.Element("summary").Nodes(), req),
+                                inf.Documentation != null && inf.Documentation.Element("inheritdoc") != null && getImplementedMembers(inf.Member).FirstOrDefault() is MemberInfo inheritor
+                                    ? new EM("Refer to the documentation for ", friendlyMemberName(inheritor, containingType: true, url: documentationCompatibleMemberName(inheritor) is string dcmn && _members.TryGetValue(dcmn, out var dmi) ? req.Url.WithPath("/" + dcmn.UrlEscape()).ToHref() : null), ".")
+                                    : inf.Documentation == null || inf.Documentation.Element("summary") == null
+                                        ? new EM(gr.Count > 1 ? "These members are not documented." : "This member is not documented.")
+                                        : interpretNodes(inf.Documentation.Element("summary").Nodes(), req),
                                 inf.Documentation == null || inf.Documentation.Element("remarks") == null
                                     ? null
                                     : new object[] { " ", new SPAN { class_ = "extra" }._("(see also remarks)") }
@@ -1388,6 +1391,8 @@ namespace RT.DocGen
                 return doc2 == null;
             else if (doc2 == null)
                 return false;
+            if (doc1.Element("inheritdoc") != null || doc2.Element("inheritdoc") != null)
+                return false;
             if (doc1.Element("summary") == null)
                 return doc2.Element("summary") == null;
             else if (doc2.Element("summary") == null)
@@ -1399,9 +1404,9 @@ namespace RT.DocGen
                 : XNode.DeepEquals(doc1.Element("summary"), doc2.Element("summary"));
         }
 
-        private IEnumerable<object> formatMemberExtraInfo(HttpRequest req, MemberInfo member, bool markInterfaceMethods, Type inheritedFrom, Dictionary<Type, Type> subst, DocHideInfo[] hides)
+        private IEnumerable<object> formatMemberExtraInfo(HttpRequest req, MemberInfo member, Type inheritedFrom, Dictionary<Type, Type> subst, DocHideInfo[] hides)
         {
-            var listItems = formatMemberExtraInfoItems(req, member, markInterfaceMethods, inheritedFrom, subst, hides).ToList();
+            var listItems = formatMemberExtraInfoItems(req, member, markInterfaceMethods: false, inheritedFrom, subst, hides).ToList();
             if (listItems.Count > 0)
                 yield return new UL { class_ = "extra" }._(listItems);
         }
@@ -1415,80 +1420,41 @@ namespace RT.DocGen
                 foreach (var hide in hides)
                     yield return new LI("Hides ", friendlyMemberName(hide.Member, containingType: true, parameterTypes: true, url: req.Url.WithPath("/" + hide.MemberName.UrlEscape()).ToHref(), baseUrl: req.Url, subst: hide.Substitutions));
 
-            var method = member as MethodInfo;
+            if (member.DeclaringType.IsInterface && markInterfaceMethods)
+                yield return new LI(member is MethodInfo ? "Interface method" : member is PropertyInfo ? "Interface property" : "Interface event");
+
+            var method =
+                member is MethodInfo methodInfo ? methodInfo :
+                member is PropertyInfo pi ? (pi.GetGetMethod() ?? pi.GetSetMethod()) :
+                member is EventInfo ei ? (ei.GetAddMethod() ?? ei.GetRemoveMethod()) : null;
             if (method == null)
+                yield break;
+
+            bool showVirtual = method.IsVirtual;
+            foreach (var baseMember in getImplementedMembers(member))
             {
-                var prop = member as PropertyInfo;
-                if (prop != null)
-                    method = prop.GetGetMethod() ?? prop.GetSetMethod();
+                if (baseMember.DeclaringType.IsInterface)
+                {
+                    var dcmn = documentationCompatibleMemberName(baseMember);
+                    string url = _members.ContainsKey(dcmn) ? req.Url.WithPath("/" + dcmn.UrlEscape()).ToHref() : null;
+                    yield return new LI("Implements: ", friendlyMemberName(baseMember, containingType: true, parameterTypes: true, url: url, baseUrl: req.Url));
+                    showVirtual = showVirtual && !method.IsFinal;
+                }
                 else
                 {
-                    var evnt = member as EventInfo;
-                    if (evnt != null)
-                    {
-                        method = evnt.GetAddMethod() ?? evnt.GetRemoveMethod();
-                        if (method == null)
-                            yield break;
-                    }
-                    else
-                        yield break;
-                }
-            }
-
-            MemberInfo baseDefinition = method.GetBaseDefinition();
-            var basePropOrEvent = baseDefinition == null ? null :
-                 baseDefinition.DeclaringType.GetProperties().FirstOrDefault(p => p.GetGetMethod() == baseDefinition || p.GetSetMethod() == baseDefinition) ??
-                (MemberInfo) baseDefinition.DeclaringType.GetEvents().FirstOrDefault(e => e.GetAddMethod() == baseDefinition || e.GetRemoveMethod() == baseDefinition);
-            if (basePropOrEvent != null)
-                baseDefinition = basePropOrEvent;
-            if (method.DeclaringType.IsInterface)
-            {
-                if (markInterfaceMethods)
-                    yield return new LI(member is MethodInfo ? "Interface method" : member is PropertyInfo ? "Interface property" : "Interface event");
-            }
-            else if (method.IsVirtual)
-            {
-                bool showVirtual = true;
-                if (baseDefinition != member)
-                {
-                    string url = null;
-                    var baseDefinitionWithoutGenerics =
-                        // Dirty hack, but simplest way I could find to retrieve the uninstantiated MethodInfo
-                        baseDefinition is MethodInfo mi ? (mi.ContainsGenericParameters ? MethodInfo.GetMethodFromHandle(mi.MethodHandle, mi.DeclaringType.GetGenericTypeDefinition().TypeHandle) : mi) : baseDefinition;
-                    var dcmn = documentationCompatibleMemberName(baseDefinitionWithoutGenerics);
-                    if (_members.ContainsKey(dcmn))
-                        url = req.Url.WithPath("/" + dcmn.UrlEscape()).ToHref();
-                    yield return new LI(new object[] { "Overrides: ", friendlyMemberName(baseDefinition, containingType: true, parameterTypes: true, url: url, baseUrl: req.Url) });
+                    var dcmn = documentationCompatibleMemberName(baseMember);
+                    string url = _members.ContainsKey(dcmn) ? req.Url.WithPath("/" + dcmn.UrlEscape()).ToHref() : null;
+                    yield return new LI(new object[] { "Overrides: ", friendlyMemberName(baseMember, containingType: true, parameterTypes: true, url: url, baseUrl: req.Url) });
                     if (method.IsFinal)
                         yield return new LI("Sealed");
                     showVirtual = false;
                 }
-
-                foreach (var interf in method.ReflectedType.GetInterfaces())
-                {
-                    var map = method.ReflectedType.GetInterfaceMap(interf);
-                    var index = map.TargetMethods.IndexOf(method);
-                    if (index != -1)
-                    {
-                        string url = null;
-                        var interfaceMember =
-                             interf.GetProperties().FirstOrDefault(p => p.GetGetMethod() == map.InterfaceMethods[index] || p.GetSetMethod() == map.InterfaceMethods[index]) ??
-                            (MemberInfo) interf.GetEvents().FirstOrDefault(e => e.GetAddMethod() == map.InterfaceMethods[index] || e.GetRemoveMethod() == map.InterfaceMethods[index]) ??
-                            map.InterfaceMethods[index];
-                        var interfaceMemberDefinition = findMemberDefinition(interfaceMember);
-                        var dcmn = documentationCompatibleMemberName(interfaceMemberDefinition);
-                        if (_members.ContainsKey(dcmn))
-                            url = req.Url.WithPath("/" + dcmn.UrlEscape()).ToHref();
-                        yield return new LI("Implements: ", friendlyMemberName(interfaceMember, containingType: true, parameterTypes: true, url: url, baseUrl: req.Url));
-                        showVirtual = showVirtual && !method.IsFinal;
-                    }
-                }
-
-                if (method.IsAbstract)
-                    yield return new LI("Abstract");
-                else if (showVirtual)
-                    yield return new LI("Virtual");
             }
+
+            if (method.IsAbstract)
+                yield return new LI("Abstract");
+            else if (showVirtual)
+                yield return new LI("Virtual");
         }
 
         private MemberInfo findMemberDefinition(MemberInfo member)
@@ -1514,6 +1480,41 @@ namespace RT.DocGen
             var evnt = member as EventInfo;
             Ut.Assert(evnt != null);
             return member.DeclaringType.GetGenericTypeDefinition().GetEvents().FirstOrDefault(e => e.Name == evnt.Name);
+        }
+
+        private IEnumerable<MemberInfo> getImplementedMembers(MemberInfo member)
+        {
+            var method =
+                member is MethodInfo methodInfo ? methodInfo :
+                member is PropertyInfo pi ? (pi.GetGetMethod() ?? pi.GetSetMethod()) :
+                member is EventInfo ei ? (ei.GetAddMethod() ?? ei.GetRemoveMethod()) : null;
+            if (method == null)
+                yield break;
+
+            if (!method.DeclaringType.IsInterface && method.IsVirtual)
+            {
+                // If the member is virtual, find out if it has a base definition in a base type
+                MemberInfo baseDefinition = method.GetBaseDefinition();
+                var basePropOrEvent = baseDefinition == null ? null :
+                    baseDefinition.DeclaringType.GetProperties().FirstOrDefault(p => p.GetGetMethod() == baseDefinition || p.GetSetMethod() == baseDefinition) ??
+                    (MemberInfo) baseDefinition.DeclaringType.GetEvents().FirstOrDefault(e => e.GetAddMethod() == baseDefinition || e.GetRemoveMethod() == baseDefinition);
+                if (basePropOrEvent != null)
+                    baseDefinition = basePropOrEvent;
+                if (baseDefinition != member)
+                    yield return baseDefinition;
+            }
+
+            foreach (var interf in member.ReflectedType.GetInterfaces())
+            {
+                // Find out if the member implements an interface member
+                var map = member.ReflectedType.GetInterfaceMap(interf);
+                var index = map.TargetMethods.IndexOf(method);
+                if (index != -1)
+                    yield return
+                        interf.GetProperties().FirstOrDefault(p => p.GetGetMethod() == map.InterfaceMethods[index] || p.GetSetMethod() == map.InterfaceMethods[index]) ??
+                        (MemberInfo) interf.GetEvents().FirstOrDefault(e => e.GetAddMethod() == map.InterfaceMethods[index] || e.GetRemoveMethod() == map.InterfaceMethods[index]) ??
+                        map.InterfaceMethods[index];
+            }
         }
 
         private bool sameExcept(MethodInfo m1, MethodInfo m2, Type[] genericTypeParameters, Type[] genericTypeArguments)
@@ -1886,8 +1887,8 @@ namespace RT.DocGen
             {
                 var result =
                     quickUrlFinder(req, query, string.Equals) ??
-                    quickUrlFinder(req, query, StringExtensions.EqualsNoCase) ??
-                    quickUrlFinder(req, query, StringExtensions.ContainsNoCase);
+                    quickUrlFinder(req, query, StringExtensions.EqualsIgnoreCase) ??
+                    quickUrlFinder(req, query, StringExtensions.ContainsIgnoreCase);
                 if (result != null)
                     return result;
             }
