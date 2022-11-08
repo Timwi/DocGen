@@ -205,15 +205,11 @@ namespace RT.DocGen
                                 .Where(m => m.DeclaringType == t && shouldMemberBeDisplayed(m)))
                             {
                                 var dcmn = documentationCompatibleMemberName(mem);
-                                XElement mdoc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == dcmn);
+                                var mdoc = e.Element("members").Elements("member").FirstOrDefault(n => n.Attribute("name").Value == dcmn);
 
                                 // Special case: if it's an automatically-generated public default constructor without documentation, auto-generate documentation for it
-                                if (mem is ConstructorInfo && mdoc == null)
-                                {
-                                    var c = (ConstructorInfo) mem;
-                                    if (c.IsPublic && c.GetParameters().Length == 0)
-                                        mdoc = new XElement("member", new XAttribute("name", dcmn), new XElement("summary", "Creates a new instance of ", new XElement("see", new XAttribute("cref", typeFullName)), "."));
-                                }
+                                if (mdoc == null && mem is ConstructorInfo constr && constr.IsPublic && constr.GetParameters().Length == 0)
+                                    mdoc = new XElement("member", new XAttribute("name", dcmn), new XElement("summary", "Creates a new instance of ", new XElement("see", new XAttribute("cref", typeFullName)), "."));
 
                                 var memDoc = new DocMemberInfo { Member = mem, Documentation = mdoc };
                                 typeinfo.Members[dcmn] = memDoc;
@@ -1083,6 +1079,9 @@ namespace RT.DocGen
                             )
                         ),
                         new TD(
+                            kvp.Value.Documentation == null || kvp.Value.Documentation.Element("image") == null
+                                ? null
+                                : interpretImage(kvp.Value.Documentation.Element("image").Attribute("type")?.Value, kvp.Value.Documentation.Element("image").Value),
                             kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
                                 ? new EM("This type is not documented.")
                                 : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req),
@@ -1093,6 +1092,13 @@ namespace RT.DocGen
                     ))
                 )
             );
+        }
+
+        private object interpretImage(string type, string content)
+        {
+            if (type == "raw")
+                return new DIV { class_ = "image" }._(new RawTag(content));
+            return null;
         }
 
         private IEnumerable<object> generateMemberDocumentation(HttpRequest req, MemberInfo member, XElement documentation)
@@ -1131,10 +1137,13 @@ namespace RT.DocGen
 
             if (documentation != null)
             {
+                var image = documentation.Element("image");
+                if (image != null)
+                    yield return interpretImage(documentation.Element("image").Attribute("type")?.Value, documentation.Element("image").Value);
                 var summary = documentation.Element("summary");
                 if (summary != null)
                 {
-                    yield return new H2("Summary");
+                    yield return new H2 { class_ = "summary-heading" }._("Summary");
                     yield return interpretNodes(summary.Nodes(), req);
                 }
             }
@@ -1222,10 +1231,13 @@ namespace RT.DocGen
                 yield return new DIV(new EM("This type is not documented.")) { class_ = "warning" };
             else
             {
+                var image = documentation.Element("image");
+                if (image != null)
+                    yield return interpretImage(documentation.Element("image").Attribute("type")?.Value, documentation.Element("image").Value);
                 var summary = documentation.Element("summary");
                 if (summary != null)
                 {
-                    yield return new H2("Summary");
+                    yield return new H2 { class_ = "summary-heading" }._("Summary");
                     yield return interpretNodes(summary.Nodes(), req);
                 }
 
@@ -1668,9 +1680,9 @@ namespace RT.DocGen
 
         private IEnumerable<object> interpretNode(XNode node, HttpRequest req)
         {
-            if (node is XText)
+            if (node is XText xt)
             {
-                yield return ((XText) node).Value;
+                yield return xt.Value;
                 yield break;
             }
 
@@ -1697,7 +1709,8 @@ namespace RT.DocGen
                     )
                 ));
             else if (elem.Name == "code")
-                yield return new PRE { class_ = elem.Attribute("monospace").NullOr(a => a.Value) == "true" ? "monospace" : null }._(interpretPre(elem, req));
+                yield return elem.Attribute("type")?.Value == "raw" ? new RawTag(elem.Value) :
+                    new PRE { class_ = elem.Attribute("monospace")?.Value == "true" ? "monospace" : null }._(interpretPre(elem, req));
             else if (elem.Name == "see" && elem.Attribute("cref") != null && elem.Value == "")
                 yield return interpretCref(elem.Attribute("cref").Value, req, false);
             else if (elem.Name == "see" && elem.Attribute("cref") != null)
