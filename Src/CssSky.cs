@@ -231,6 +231,7 @@ b { padding-right: 1em; }
 	padding: .25cm;
 	border: 1px solid #bbccff;
 	border-radius: 5px;
+	margin-left: .5cm;
 }
 ";
 	}

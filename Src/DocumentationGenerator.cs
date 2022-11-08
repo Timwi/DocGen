@@ -1079,9 +1079,7 @@ namespace RT.DocGen
                             )
                         ),
                         new TD(
-                            kvp.Value.Documentation == null || kvp.Value.Documentation.Element("image") == null
-                                ? null
-                                : interpretImage(kvp.Value.Documentation.Element("image").Attribute("type")?.Value, kvp.Value.Documentation.Element("image").Value),
+                            kvp.Value.Documentation == null ? null : kvp.Value.Documentation.Elements("image").Select(image => interpretImage(image.Attribute("type")?.Value, image.Value)),
                             kvp.Value.Documentation == null || kvp.Value.Documentation.Element("summary") == null
                                 ? new EM("This type is not documented.")
                                 : interpretNodes(kvp.Value.Documentation.Element("summary").Nodes(), req),
@@ -1137,9 +1135,8 @@ namespace RT.DocGen
 
             if (documentation != null)
             {
-                var image = documentation.Element("image");
-                if (image != null)
-                    yield return interpretImage(documentation.Element("image").Attribute("type")?.Value, documentation.Element("image").Value);
+                foreach (var image in documentation.Elements("image"))
+                    yield return interpretImage(image.Attribute("type")?.Value, image.Value);
                 var summary = documentation.Element("summary");
                 if (summary != null)
                 {
@@ -1231,9 +1228,8 @@ namespace RT.DocGen
                 yield return new DIV(new EM("This type is not documented.")) { class_ = "warning" };
             else
             {
-                var image = documentation.Element("image");
-                if (image != null)
-                    yield return interpretImage(documentation.Element("image").Attribute("type")?.Value, documentation.Element("image").Value);
+                foreach (var image in documentation.Elements("image"))
+                    yield return interpretImage(image.Attribute("type")?.Value, image.Value);
                 var summary = documentation.Element("summary");
                 if (summary != null)
                 {
