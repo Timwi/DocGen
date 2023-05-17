@@ -1725,8 +1725,14 @@ namespace RT.DocGen
             }
             else if (elem.Name == "c")
                 yield return new CODE(interpretNodes(elem.Nodes(), req));
-            else if (elem.Name == "em")
+            else if (elem.Name == "em" || elem.Name == "i")
                 yield return new EM(interpretNodes(elem.Nodes(), req));
+            else if (elem.Name == "strong" || elem.Name == "b")
+                yield return new STRONG(interpretNodes(elem.Nodes(), req));
+            else if (elem.Name == "u")
+                yield return new U(interpretNodes(elem.Nodes(), req));
+            else if (elem.Name == "a")
+                yield return new A { href = elem.AttributeI("href")?.Value }._(interpretNodes(elem.Nodes(), req));
             else if (elem.Name == "paramref" && elem.Attribute("name") != null)
                 yield return new SPAN { class_ = "parameter" }._(new EM(elem.Attribute("name").Value));
             else if (elem.Name == "typeparamref" && elem.Attribute("name") != null)
