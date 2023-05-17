@@ -35,6 +35,31 @@
     <StartupObject />
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="RT.Json, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\RT.Json.2.0.1743\lib\netstandard2.0\RT.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="RT.PostBuild, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\RT.PostBuild.2.0.1743\lib\netstandard2.0\RT.PostBuild.dll</HintPath>
+    </Reference>
+    <Reference Include="RT.Serialization, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\RT.Serialization.2.0.1743\lib\netstandard2.0\RT.Serialization.dll</HintPath>
+    </Reference>
+    <Reference Include="RT.Serialization.Json, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\RT.Serialization.Json.2.0.1743\lib\netstandard2.0\RT.Serialization.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="RT.Serialization.Xml, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\RT.Serialization.Xml.2.0.1743\lib\netstandard2.0\RT.Serialization.Xml.dll</HintPath>
+    </Reference>
+    <Reference Include="RT.Servers, Version=1.0.1685.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\RT.Servers.1.0.1685\lib\netstandard2.0\RT.Servers.dll</HintPath>
+    </Reference>
+    <Reference Include="RT.TagSoup, Version=1.0.1633.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\RT.TagSoup.1.0.1633\lib\netstandard2.0\RT.TagSoup.dll</HintPath>
+    </Reference>
+    <Reference Include="RT.Util.Core, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\RT.Util.Core.2.0.1743\lib\netstandard2.0\RT.Util.Core.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.XML" />
     <Reference Include="System.Xml.Linq" />
@@ -51,42 +76,13 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\RT.Servers\Src\RT.Servers.csproj">
-      <Project>{a7333c19-56a9-4a8e-a196-7648666ef26a}</Project>
-      <Name>RT.Servers</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\RT.TagSoup\Src\RT.TagSoup.csproj">
-      <Project>{8F80D916-8999-45D8-ACB2-FFA7E2698FD6}</Project>
-      <Name>TagSoup</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\RT.Util\RT.Json\RT.Json.csproj">
-      <Project>{d0b6651e-1217-40d0-a9db-4c13efa2d995}</Project>
-      <Name>RT.Json</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\RT.Util\RT.PostBuild\RT.PostBuild.csproj">
-      <Project>{dccefec3-788d-498a-99ba-15f916211206}</Project>
-      <Name>RT.PostBuild</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\RT.Util\RT.Serialization.Json\RT.Serialization.Json.csproj">
-      <Project>{c8abacfd-d2c0-4f8a-a935-a89551489c2a}</Project>
-      <Name>RT.Serialization.Json</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\RT.Util\RT.Serialization.Xml\RT.Serialization.Xml.csproj">
-      <Project>{cc2e1bee-9546-4ef3-a009-b08b76d2ba6a}</Project>
-      <Name>RT.Serialization.Xml</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\RT.Util\RT.Serialization\RT.Serialization.csproj">
-      <Project>{395c570c-1bc1-4fe9-bb42-55f871190268}</Project>
-      <Name>RT.Serialization</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\RT.Util\RT.Util.Core\RT.Util.Core.csproj">
-      <Project>{8D0FE79C-AD8D-475C-9E6F-9CAE85365B5D}</Project>
-      <Name>RT.Util.Core</Name>
-    </ProjectReference>
     <ProjectReference Include="..\..\Propeller\API\PropellerApi.csproj">
       <Project>{5770EE79-8340-41FB-9B8E-EB4A3C487FF1}</Project>
       <Name>PropellerApi</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
