@@ -1695,7 +1695,7 @@ namespace RT.DocGen
                             e.Elements("description").Any() ? new BLOCKQUOTE(interpretNodes(e.Element("description").Nodes(), req)) : null)
                         : e.Elements("description").Any()
                             ? new LI(interpretNodes(e.Element("description").Nodes(), req))
-                            : null
+                            : new LI(interpretNodes(e.Nodes(), req))
                 ));
             else if (elem.Name == "list" && elem.Attribute("type") != null && elem.Attribute("type").Value == "table")
                 yield return new TABLE { class_ = "usertable" }._(elem.Elements("item").Select(e =>
