@@ -1688,22 +1688,30 @@ namespace RT.DocGen
                 yield return new P(interpretNodes(elem.Nodes(), req));
             else if (elem.Name == "heading")
                 yield return new H2(interpretNodes(elem.Nodes(), req));
-            else if (elem.Name == "list" && elem.Attribute("type") != null && elem.Attribute("type").Value == "bullet")
-                yield return new UL(elem.Elements("item").Select(e =>
+            else if (elem.Name == "list" && elem.Attribute("type") != null && elem.Attribute("type").Value == "table")
+                yield return new TABLE { class_ = "usertable" }._(elem.Elements("item").Select(e =>
+                    new TR(
+                        new TD(new STRONG(interpretNodes(e.Element("term").Nodes(), req))),
+                        new TD(interpretNodes(e.Element("description").Nodes(), req)))));
+            else if (elem.Name == "list")
+            {
+                var content = elem.Elements("item").Select(e =>
                     e.Elements("term").Any()
                         ? (object) new LI(new STRONG(interpretNodes(e.Element("term").Nodes(), req)),
                             e.Elements("description").Any() ? new BLOCKQUOTE(interpretNodes(e.Element("description").Nodes(), req)) : null)
                         : e.Elements("description").Any()
                             ? new LI(interpretNodes(e.Element("description").Nodes(), req))
-                            : new LI(interpretNodes(e.Nodes(), req))
-                ));
-            else if (elem.Name == "list" && elem.Attribute("type") != null && elem.Attribute("type").Value == "table")
-                yield return new TABLE { class_ = "usertable" }._(elem.Elements("item").Select(e =>
-                    new TR(
-                        new TD(new STRONG(interpretNodes(e.Element("term").Nodes(), req))),
-                        new TD(interpretNodes(e.Element("description").Nodes(), req))
-                    )
-                ));
+                            : new LI(interpretNodes(e.Nodes(), req)));
+                if (elem.Attribute("type")?.Value == "bullet")
+                    yield return new UL(content);
+                else if (elem.Attribute("type")?.Value == "number")
+                    yield return new OL(content);
+                else
+                {
+                    yield return @"[Unrecognized list type: ""{0}""]".Fmt(elem.Attribute("type")?.Value);
+                    yield return interpretNodes(elem.Nodes(), req);
+                }
+            }
             else if (elem.Name == "code")
                 yield return elem.Attribute("type")?.Value == "raw" ? new RawTag(elem.Value) :
                     new PRE { class_ = elem.Attribute("monospace")?.Value == "true" ? "monospace" : null }._(interpretPre(elem, req));
