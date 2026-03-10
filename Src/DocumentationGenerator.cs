@@ -1459,10 +1459,13 @@ namespace RT.DocGen
                 }
             }
 
-            if (method.IsAbstract)
-                yield return new LI("Abstract");
-            else if (showVirtual)
-                yield return new LI("Virtual");
+            if (!method.DeclaringType.IsInterface)
+            {
+                if (method.IsAbstract)
+                    yield return new LI("Abstract");
+                else if (showVirtual)
+                    yield return new LI("Virtual");
+            }
         }
 
         private MemberInfo findMemberDefinition(MemberInfo member)
@@ -1512,17 +1515,18 @@ namespace RT.DocGen
                     yield return baseDefinition;
             }
 
-            foreach (var interf in member.ReflectedType.GetInterfaces())
-            {
-                // Find out if the member implements an interface member
-                var map = member.ReflectedType.GetInterfaceMap(interf);
-                var index = map.TargetMethods.IndexOf(method);
-                if (index != -1)
-                    yield return
-                        interf.GetProperties().FirstOrDefault(p => p.GetGetMethod() == map.InterfaceMethods[index] || p.GetSetMethod() == map.InterfaceMethods[index]) ??
-                        (MemberInfo) interf.GetEvents().FirstOrDefault(e => e.GetAddMethod() == map.InterfaceMethods[index] || e.GetRemoveMethod() == map.InterfaceMethods[index]) ??
-                        map.InterfaceMethods[index];
-            }
+            if (!member.ReflectedType.IsInterface)
+                foreach (var interf in member.ReflectedType.GetInterfaces())
+                {
+                    // Find out if the member implements an interface member
+                    var map = member.ReflectedType.GetInterfaceMap(interf);
+                    var index = map.TargetMethods.IndexOf(method);
+                    if (index != -1)
+                        yield return
+                            interf.GetProperties().FirstOrDefault(p => p.GetGetMethod() == map.InterfaceMethods[index] || p.GetSetMethod() == map.InterfaceMethods[index]) ??
+                            (MemberInfo) interf.GetEvents().FirstOrDefault(e => e.GetAddMethod() == map.InterfaceMethods[index] || e.GetRemoveMethod() == map.InterfaceMethods[index]) ??
+                            map.InterfaceMethods[index];
+                }
         }
 
         private bool sameExcept(MethodInfo m1, MethodInfo m2, Type[] genericTypeParameters, Type[] genericTypeArguments)
