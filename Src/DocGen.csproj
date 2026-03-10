@@ -1,101 +1,22 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProductVersion>9.0.30729</ProductVersion>
-    <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{0D929F3C-D064-4266-8F35-907FA7650D2D}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>RT.DocGen</RootNamespace>
-    <AssemblyName>DocGen</AssemblyName>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <OutputPath>..\Builds\$(Configuration)</OutputPath>
-    <IntermediateOutputPath>..\Builds\$(Configuration)\obj-$(AssemblyName)</IntermediateOutputPath>
-    <BaseIntermediateOutputPath>..\Builds\$(Configuration)\obj-$(AssemblyName)</BaseIntermediateOutputPath>
-    <TargetFrameworkProfile>
-    </TargetFrameworkProfile>
+    <Configurations>Debug;Release</Configurations>
+    <TargetFrameworks>net10.0-windows</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>2.0.0</Version>
+    <Authors>Timwi</Authors>
+    <Description>A Propeller module that serves navigable, formatted documentation for .NET libraries.</Description>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <DefineConstants>TRACE</DefineConstants>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup>
-    <StartupObject />
-  </PropertyGroup>
+
   <ItemGroup>
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="PropellerApi, Version=1.0.31.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\PropellerApi.1.0.31\lib\net472\PropellerApi.dll</HintPath>
-    </Reference>
-    <Reference Include="RT.Json, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.Json.2.0.1743\lib\netstandard2.0\RT.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="RT.PostBuild, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.PostBuild.2.0.1743\lib\netstandard2.0\RT.PostBuild.dll</HintPath>
-    </Reference>
-    <Reference Include="RT.Serialization, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.Serialization.2.0.1743\lib\netstandard2.0\RT.Serialization.dll</HintPath>
-    </Reference>
-    <Reference Include="RT.Serialization.Binary, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.Serialization.Binary.2.0.1743\lib\netstandard2.0\RT.Serialization.Binary.dll</HintPath>
-    </Reference>
-    <Reference Include="RT.Serialization.Json, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.Serialization.Json.2.0.1743\lib\netstandard2.0\RT.Serialization.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="RT.Serialization.Xml, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.Serialization.Xml.2.0.1743\lib\netstandard2.0\RT.Serialization.Xml.dll</HintPath>
-    </Reference>
-    <Reference Include="RT.Servers, Version=1.0.1686.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.Servers.1.0.1686\lib\netstandard2.0\RT.Servers.dll</HintPath>
-    </Reference>
-    <Reference Include="RT.TagSoup, Version=1.0.1633.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.TagSoup.1.0.1633\lib\netstandard2.0\RT.TagSoup.dll</HintPath>
-    </Reference>
-    <Reference Include="RT.Util, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.Util.2.0.1743\lib\net472\RT.Util.dll</HintPath>
-    </Reference>
-    <Reference Include="RT.Util.Core, Version=2.0.1743.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.Util.Core.2.0.1743\lib\netstandard2.0\RT.Util.Core.dll</HintPath>
-    </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.XML" />
-    <Reference Include="System.Xml.Linq" />
+    <PackageReference Include="PropellerApi" Version="2.1.0" />
+    <PackageReference Include="RT.TagSoup" Version="1.1.52" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Include="CrefParser.cs" />
-    <Compile Include="CssSahifa.cs" />
-    <Compile Include="CssSky.cs" />
-    <Compile Include="DocGenProgram.cs" />
-    <Compile Include="DocumentationGenerator.cs">
-    </Compile>
-    <Compile Include="Extensions.cs" />
-    <Compile Include="PropellerModule.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PostBuildEvent>"$(TargetPath)" --post-build-check "$(SolutionDir)."</PostBuildEvent>
-  </PropertyGroup>
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec WorkingDirectory="$(OutputPath)" Command="&quot;$(TargetDir)$(AssemblyName).exe&quot; --post-build-check &quot;$(SolutionDir).&quot;" />
   </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
+
 </Project>
