@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <Configurations>Debug;Release</Configurations>
-    <TargetFrameworks>net10.0-windows</TargetFrameworks>
+    <TargetFrameworks>net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Version>2.0.0</Version>
     <Authors>Timwi</Authors>
@@ -11,8 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="PropellerApi" Version="2.1.0" />
-    <PackageReference Include="RT.TagSoup" Version="1.1.52" />
+    <PackageReference Include="PropellerApi" Version="2.4.0" />
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">

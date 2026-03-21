@@ -1,30 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+﻿using RT.Json;
 using RT.PropellerApi;
+using RT.Serialization;
 using RT.Servers;
 using RT.Util;
 using RT.Util.ExtensionMethods;
-using RT.Json;
-using RT.Serialization;
 
 namespace RT.DocGen
 {
-    public class DocGenPropellerModule : MarshalByRefObject, IPropellerModule
+    public class DocGenPropellerModule : IPropellerModule
     {
-        string IPropellerModule.Name
-        {
-            get
-            {
-                return "Documentation Generator";
-            }
-        }
+        string IPropellerModule.Name => "Documentation Generator";
 
-        class Settings
+        private class Settings
         {
             [ClassifyNotNull]
-            public string[] Paths = new string[] { };
+            public string[] Paths = [];
             public bool RequireAuthentication = true;
             public string DllTempPath = null;
             public string UsernamePasswordFile = null;
@@ -32,14 +22,13 @@ namespace RT.DocGen
 
         private Settings _settings;
         private LoggerBase _log;
-        private ISettingsSaver _saver;
         private DocumentationGenerator _docGen;
 
         void IPropellerModule.Init(LoggerBase log, JsonValue settings, ISettingsSaver saver)
         {
             _log = log;
-            _saver = saver;
             _settings = ClassifyJson.Deserialize<Settings>(settings) ?? new Settings();
+            saver.SaveSettings(ClassifyJson.Serialize(_settings));
 
             var validPaths = new List<string>();
 
@@ -65,7 +54,7 @@ namespace RT.DocGen
                 }
 
                 // Find a new folder to put the DLL files into
-                int j = 1;
+                var j = 1;
                 copyToPath = Path.Combine(tempPath, "docgen-tmp-" + j);
                 while (Directory.Exists(copyToPath))
                 {
@@ -88,18 +77,12 @@ namespace RT.DocGen
             }
         }
 
-        string[] IPropellerModule.FileFiltersToBeMonitoredForChanges
-        {
-            get
-            {
-                return
-                    _settings.Paths.Select(p => Path.Combine(p, "*.dll")).Concat(
-                    _settings.Paths.Select(p => Path.Combine(p, "*.xml"))).ToArray();
-            }
-        }
+        string[] IPropellerModule.FileFiltersToBeMonitoredForChanges => [
+            .._settings.Paths.Select(p => Path.Combine(p, "*.dll")),
+            .._settings.Paths.Select(p => Path.Combine(p, "*.xml"))];
 
-        HttpResponse IPropellerModule.Handle(HttpRequest req) { return _docGen.Handle(req); }
-        bool IPropellerModule.MustReinitialize { get { return false; } }
+        HttpResponse IPropellerModule.Handle(HttpRequest req) => _docGen.Handle(req);
+        bool IPropellerModule.MustReinitialize => false;
         void IPropellerModule.Shutdown() { }
     }
 }
