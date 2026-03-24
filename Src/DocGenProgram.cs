@@ -32,7 +32,13 @@ internal static class DocGenProgram
         Console.WriteLine("{0}╘══{1}══╝{0}".Fmt(spaces, new string('═', msg.Length)));
         Console.ResetColor();
 
-        PropellerUtil.RunStandalone(PathUtil.AppPathCombine("DocGen.Settings.json"), new DocGenPropellerModule());
+        PropellerUtil.RunStandalone(PathUtil.AppPathCombine("DocGen.Settings.json"), new DocGenPropellerModule(), propagateExceptions:
+            #if DEBUG
+            true
+            #else
+            false
+            #endif
+        );
         return 0;
     }
 }
