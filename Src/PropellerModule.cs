@@ -34,7 +34,7 @@ namespace RT.DocGen
 
             foreach (var path in _settings.Paths)
                 if (!Directory.Exists(path))
-                    _log.Warn(@"DocGen: Warning: The folder ""{0}"" specified in the settings does not exist. Ignoring path.".Fmt(path));
+                    _log.Warn($@"DocGen: Warning: The folder ""{path}"" specified in the settings does not exist. Ignoring path.");
                 else
                     validPaths.Add(path);
             _settings.Paths = validPaths.ToArray();
@@ -67,12 +67,12 @@ namespace RT.DocGen
             _docGen = new DocumentationGenerator(_settings.Paths, _settings.RequireAuthentication ? _settings.UsernamePasswordFile ?? "" : null, copyToPath);
             lock (_log)
             {
-                _log.Info("DocGen initialised with {0} assemblies: {1}".Fmt(_docGen.AssembliesLoaded.Count, _docGen.AssembliesLoaded.JoinString(", ")));
+                _log.Info($"DocGen initialized with {_docGen.AssembliesLoaded.Count} assemblies.");
                 if (_docGen.AssemblyLoadErrors.Count > 0)
                 {
-                    _log.Warn("{0} assembly load errors:".Fmt(_docGen.AssemblyLoadErrors.Count));
+                    _log.Warn($"{_docGen.AssemblyLoadErrors.Count} assembly load errors:");
                     foreach (var tuple in _docGen.AssemblyLoadErrors)
-                        _log.Warn("{0} error: {1}".Fmt(tuple.Item1, tuple.Item2));
+                        _log.Warn($"{tuple.Item1} error: {tuple.Item2}");
                 }
             }
         }

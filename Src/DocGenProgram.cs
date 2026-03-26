@@ -27,17 +27,17 @@ internal static class DocGenProgram
         Console.ForegroundColor = ConsoleColor.White;
         var msg = IsDebug ? "DEBUG MODE" : "RELEASE MODE";
         var spaces = new string(' ', (Console.BufferWidth - msg.Length - 7) / 2);
-        Console.WriteLine("{0}┌──{1}──╖{0}".Fmt(spaces, new string('─', msg.Length)));
-        Console.WriteLine("{0}│  {1}  ║{0}".Fmt(spaces, msg));
-        Console.WriteLine("{0}╘══{1}══╝{0}".Fmt(spaces, new string('═', msg.Length)));
+        Console.WriteLine($"{spaces}┌──{new string('─', msg.Length)}──╖{spaces}");
+        Console.WriteLine($"{spaces}│  {msg}  ║{spaces}");
+        Console.WriteLine($"{spaces}╘══{new string('═', msg.Length)}══╝{spaces}");
         Console.ResetColor();
 
         PropellerUtil.RunStandalone(PathUtil.AppPathCombine("DocGen.Settings.json"), new DocGenPropellerModule(), propagateExceptions:
-            #if DEBUG
+#if DEBUG
             true
-            #else
+#else
             false
-            #endif
+#endif
         );
         return 0;
     }

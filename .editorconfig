@@ -11,3 +11,6 @@ dotnet_diagnostic.IDE0057.severity = none
 
 # CA1859: I know when to use more specific or more general return types
 dotnet_diagnostic.CA1859.severity = none
+
+# SYSLIB1045: GeneratedRegexAttribute is overkill here
+dotnet_diagnostic.SYSLIB1045.severity = none

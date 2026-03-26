@@ -26,11 +26,10 @@ namespace RT.DocGen
         EndOfFile
     }
 
-    sealed class Token
+    sealed class Token(TokenType type, string item = null)
     {
-        public TokenType Type { get; private set; }
-        public string Item { get; private set; }
-        public Token(TokenType type, string item = null) { Type = type; Item = item; }
+        public TokenType Type { get; private set; } = type;
+        public string Item { get; private set; } = item;
         public override string ToString() => $"{Type}{(Item != null ? " " : null)}{Item}";
     }
 
@@ -123,7 +122,7 @@ namespace RT.DocGen
         {
             Ut.Assert(Parent != null);
             var arguments = Arguments.Select(a => getMember(a, typeGenerics, methodGenerics, 0)).ToArray();
-            if (arguments.Any(member => member == null || !(member is Type)))
+            if (arguments.Any(member => member is not Type))
                 return null;
             return (getMember(Parent, typeGenerics, methodGenerics, arguments.Length) as Type).NullOr(type => type.MakeGenericType(arguments.Cast<Type>().ToArray()));
         }
@@ -184,10 +183,10 @@ namespace RT.DocGen
             return (getMember(parent.Parent, typeGenerics, methodGenerics, 0) as Type)
                 .NullOr(type =>
                 {
-                    var typeGen = type.IsGenericTypeDefinition ? type.GetGenericArguments() : new Type[0];
+                    var typeGen = type.IsGenericTypeDefinition ? type.GetGenericArguments() : [];
                     return type.GetMethods().FirstOrDefault(m =>
                     {
-                        var methodGen = m.IsGenericMethodDefinition ? m.GetGenericArguments() : new Type[0];
+                        var methodGen = m.IsGenericMethodDefinition ? m.GetGenericArguments() : [];
                         return m.Name == parent.Name + (m.IsGenericMethodDefinition ? "`" + methodGen.Length : "") &&
                             m.GetParameters().Select(p => p.ParameterType).SequenceEqual(ParameterTypes.Select(p => getMember(p, typeGen, methodGen, 0)).Select(p => p as Type));
                     });
@@ -207,7 +206,7 @@ namespace RT.DocGen
 
     static class CrefParser
     {
-        private static Regex _lexer = new Regex(@"
+        private static readonly Regex _lexer = new(@"
                 (?<name>(?!\d)\w+(?:``?\d+)?)|   # name, optionally with number of generics
                 (?<mg>``\d+)|                             # method generic parameter
                 (?<tg>`\d+)|                                # type generic parameter
@@ -232,26 +231,25 @@ namespace RT.DocGen
                 if (m.Groups["marray"].Success)
                     return new Token(TokenType.Array, ((m.Groups["marray"].Value.Length - 1) / 3).ToString());
                 if (m.Groups["sc"].Success)
-                    switch (m.Groups["sc"].Value[0])
+                    return m.Groups["sc"].Value[0] switch
                     {
-                        case '(': return new Token(TokenType.OpenParen);
-                        case ')': return new Token(TokenType.CloseParen);
-                        case '{': return new Token(TokenType.OpenCurly);
-                        case '}': return new Token(TokenType.CloseCurly);
-                        case '@': return new Token(TokenType.At);
-                        case '*': return new Token(TokenType.Star);
-                        case ',': return new Token(TokenType.Comma);
-                        case '.': return new Token(TokenType.Dot);
-                        default:
-                            throw new InvalidOperationException("Unexpected character match: {0}".Fmt(m.Groups["sc"].Value[0]));
-                    }
-                throw new InvalidOperationException("Unexpected character in input: {0}".Fmt(m.Value));
+                        '(' => new Token(TokenType.OpenParen),
+                        ')' => new Token(TokenType.CloseParen),
+                        '{' => new Token(TokenType.OpenCurly),
+                        '}' => new Token(TokenType.CloseCurly),
+                        '@' => new Token(TokenType.At),
+                        '*' => new Token(TokenType.Star),
+                        ',' => new Token(TokenType.Comma),
+                        '.' => new Token(TokenType.Dot),
+                        _ => throw new InvalidOperationException($"Unexpected character match: {m.Groups["sc"].Value[0]}"),
+                    };
+                throw new InvalidOperationException($"Unexpected character in input: {m.Value}");
             }).Concat(new Token(TokenType.EndOfFile));
         }
 
         public static CrefNode Parse(string input)
         {
-            int i = 0;
+            var i = 0;
             var tokens = lex(input).ToArray();
             var result = parse(tokens, ref i, input);
             if (tokens[i].Type != TokenType.EndOfFile)
@@ -271,7 +269,7 @@ namespace RT.DocGen
             {
                 // zero parameters
                 i++;
-                return new CrefMethod { Member = member, ParameterTypes = new CrefNode[0], Original = originalInput };
+                return new CrefMethod { Member = member, ParameterTypes = [], Original = originalInput };
             }
 
             var parameterTypes = new List<CrefNode>();
@@ -311,7 +309,7 @@ namespace RT.DocGen
 
         private static CrefNode parseType(Token[] tokens, ref int i)
         {
-            if (tokens[i].Type == TokenType.TypeGenericParameterReference || tokens[i].Type == TokenType.MethodGenericParameterReference)
+            if (tokens[i].Type is TokenType.TypeGenericParameterReference or TokenType.MethodGenericParameterReference)
             {
                 var ret = new CrefGenericParameter
                 {

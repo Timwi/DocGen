@@ -183,7 +183,7 @@ public class DocumentationGenerator
                             {
                                 Types = [],
                                 Documentation = e.Element("members").Elements("member")
-                                    .FirstOrDefault(m => m.Attribute("name").Value == "T:{0}.NamespaceDocumentation".Fmt(namespc))
+                                    .FirstOrDefault(m => m.Attribute("name").Value == $"T:{namespc}.NamespaceDocumentation")
                                     .NullOr(m => m.Element("summary"))
                                     .NullOr(m => m.Nodes())
                             };
@@ -1641,7 +1641,7 @@ public class DocumentationGenerator
                 yield return new OL(content);
             else
             {
-                yield return @"[Unrecognized list type: ""{0}""]".Fmt(elem.Attribute("type")?.Value);
+                yield return $@"[Unrecognized list type: ""{elem.Attribute("type")?.Value}""]";
                 yield return interpretNodes(elem.Nodes(), req);
             }
         }
@@ -1680,7 +1680,7 @@ public class DocumentationGenerator
             yield return new SPAN { class_ = "parameter" }._(new EM(elem.Attribute("name").Value));
         else
         {
-            yield return @"[Unrecognized tag: ""{0}""]".Fmt(elem.Name);
+            yield return $@"[Unrecognized tag: ""{elem.Name}""]";
             yield return interpretNodes(elem.Nodes(), req);
         }
     }
