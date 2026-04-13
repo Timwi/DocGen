@@ -1241,8 +1241,10 @@ public class DocumentationGenerator
                 .Where(ti => _types.ContainsKey(getTypeFullName(ti.Type)))
                 // Get all the members of this type and all base types
                 .SelectMany(ti => _types[getTypeFullName(ti.Type)].Members.Select(m => new { InheritedFrom = ti.Type, ti.Substitutions, MemberName = m.Key, m.Value.Member, m.Value.Documentation }))
-                // Filter out internal members and inherited constructors
-                .Where(inf => isPublic(inf.Member) && (inf.InheritedFrom == type || inf.Member.MemberType != MemberTypes.Constructor))
+                // Filter out internal members
+                .Where(inf => isPublic(inf.Member))
+                // Filter out inherited members other than instance methods
+                .Where(inf => inf.InheritedFrom == type || inf.Member is MethodInfo { IsStatic: false })
                 // For chains of virtual overrides, only use the least derived member (the “base” method/property/event)
                 .GroupBy(mbr => mbr.Member is MethodInfo m ? m.GetBaseDefinition() : mbr.Member is PropertyInfo p ? p.GetBaseDefinition() : mbr.Member is EventInfo e ? e.GetBaseDefinition() : mbr.Member)
                 .Select(g => g.First())
