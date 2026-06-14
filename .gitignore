@@ -6,4 +6,4 @@ publish
 *.user
 *.sln.cache
 *.orig
-packages/
+Src/Properties/
