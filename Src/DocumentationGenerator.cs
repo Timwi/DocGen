@@ -574,7 +574,7 @@ public class DocumentationGenerator
             containingType ? friendlyTypeName(m.DeclaringType, includeNamespaces: namespaces, includeOuterTypes: true, baseUrl: baseUrl, span: !stringOnly, subst: subst, wbrs: wbrs) : null,
             containingType ? "." : null,
             m.MemberType == MemberTypes.Property
-            ? friendlyPropertyName((PropertyInfo) m, parameterTypes, parameterNames, namespaces, indent, url, baseUrl, stringOnly, subst, wbrs)
+                ? friendlyPropertyName((PropertyInfo) m, parameterTypes, parameterNames, namespaces, indent, url, baseUrl, stringOnly, subst, wbrs)
                 : stringOnly ? m.Name : new STRONG { class_ = "member-name" }._(url == null ? m.Name : new A { href = url }._(m.Name))
         );
         return stringOnly ? stringSoup(arr) : new SPAN { class_ = m.MemberType.ToString(), title = stringSoup(friendlyMemberName(m, true, true, true, true, true, stringOnly: true)) }._(arr);
@@ -686,7 +686,7 @@ public class DocumentationGenerator
             foreach (var f in t.GetFields(BindingFlags.Static | BindingFlags.Public))
                 if (f.GetValue(null).Equals(val) && info.Members.ContainsKey(documentationCompatibleMemberName(f)))
                 {
-                    yield return friendlyMemberName(f, containingType: true, url: baseUrl == null ? null : baseUrl + "/" + documentationCompatibleMemberName(f).UrlEscape(), baseUrl: baseUrl, stringOnly: stringOnly, wbrs: wbrs);
+                    yield return friendlyMemberName(f, containingType: true, url: baseUrl?.WithPath("/" + documentationCompatibleMemberName(f).UrlEscape()).ToHref(), baseUrl: baseUrl, stringOnly: stringOnly, wbrs: wbrs);
                     yield break;
                 }
             yield return "0x" + Convert.ToInt64(val).ToString("x");
